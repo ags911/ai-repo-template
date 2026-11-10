@@ -976,6 +976,17 @@ case_gitattributes_keep_lf() {
   record gitattributes_keep_lf
 }
 
+case_py_lockfile_out_of_date() {
+  # A dependency change without a matching uv.lock must fail, not be resolved on the fly.
+  new_py_repo py_lockfile_out_of_date
+  sed -i.bak 's/"pytest==9.2.0"/"pytest==9.1.0"/' pyproject.toml; rm pyproject.toml.bak
+  git add -A; commit "change a pin without relocking"
+  expect py_lockfile_out_of_date fail "needs to be updated"
+  if git diff --quiet HEAD -- uv.lock; then report py_lockfile_out_of_date_untouched 1 ""
+  else report py_lockfile_out_of_date_untouched 0 "verify rewrote uv.lock"; fi
+  record py_lockfile_out_of_date
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -1006,7 +1017,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   base_object_missing_ci binary_attribute_hides_skip skip_option_without_reason
   gitleaks_allow_without_reason reason_in_test_name_not_enough empty_reason_not_enough
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
-  secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf"
+  secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date"
 
 ran=0
 for name in $ALL_CASES; do

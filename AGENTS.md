@@ -30,6 +30,9 @@ suppression must carry `reason:` (or `reason=` in Python skip markers) on the sa
 - Keep edits inside the task's scope. No unrequested rewrites, renames, or reformatting.
 - Prefer small, behaviour-preserving refactoring steps; run tests between them.
 - If a task won't fit in one reviewable PR, propose splitting it into issues before starting.
+- When a reply explains something complex (a failure, a trade-off, a multi-step change),
+  open with a short plain-English summary: what happened, what it means, and what the human
+  needs to decide (unenforced).
 - When you add a rule to an instructions file or `ARCHITECTURE.md`, name the check that
   enforces it (a test, lint rule, or boundary config), or mark it `(unenforced)`.
 - Database migrations must be backward compatible: expand, migrate data, then contract

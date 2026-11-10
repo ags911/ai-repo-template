@@ -92,6 +92,8 @@ Four skills in the open `SKILL.md` format, shared by Claude Code and Codex:
 Copy the module with something that keeps symlinks (`cp -R`, or a git commit). On Windows,
 enable symlinks in git (`git config core.symlinks true`, with Developer Mode on) before
 cloning. Without that, the links become small text files and Claude Code sees no skills.
+The `windows-symlinks` job in `.github/workflows/selftest.yml` checks both cases on a Windows
+runner.
 `selftest/run.sh` checks that every skill has its link and every link has a skill.
 
 An agent loads a skill when the task matches its description; in Claude Code you can also

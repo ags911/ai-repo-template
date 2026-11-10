@@ -12,7 +12,8 @@ do whatever its section below says.
 | `agent-memory` | Agents repeatedly hit the same environment traps across sessions |
 | `architecture` | The codebase has distinct modules whose dependencies you want to fix |
 | `boundaries-ts` / `boundaries-python` | You have an ARCHITECTURE.md and want its rules enforced in CI |
-| `skills` | You use Claude Code and want repeatable procedures for ADRs, trade-offs, boundary checks, and quanta |
+| `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, and quanta |
+| `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
 
 ## glossary
 Fill in real terms. Delete the example row.
@@ -115,3 +116,24 @@ that should load it, and three unrelated prompts that should load none. It needs
 skill's `description`.
 Last run (2026-11-10, Claude Code 2.1.306, default model): 15 of 15. One run per prompt is
 a small sample, and trigger rates can vary by model.
+
+## agent-hooks
+Turns "done means verified" from a rule an agent reads into one it can't skip, in Claude Code
+and Codex, plus a git hook for everyone else.
+
+- `scripts/agent-stop-check.sh`: the Stop hook both agents call when they try to finish a
+  turn. If no files changed, it does nothing. If files changed and `./scripts/verify.sh`
+  fails, it blocks the stop and hands the agent verify's last lines, telling it to fix the
+  cause or, if that needs a human decision or would weaken a check, to stop and explain.
+  If the agent was already sent back once (`stop_hook_active`), it lets it stop, so it
+  can't loop.
+- `.claude/settings.json`: registers the hook for Claude Code. If you already have this
+  file, merge the `hooks.Stop` entry into it.
+- `.codex/hooks.json`: registers it for Codex. Codex only runs repo hooks you have trusted:
+  run `/hooks` in Codex once and approve it.
+- `.githooks/pre-push`: runs verify before any push. Turn it on once per clone with
+  `git config core.hooksPath .githooks`. `git push --no-verify` skips it; CI is still the gate.
+
+Verify runs at the end of any turn that changed files, so it adds verify's run time there.
+The selftest checks each behaviour above; `selftest/agent-eval.sh stop_hook` checks it with
+real agents.

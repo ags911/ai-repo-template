@@ -406,6 +406,44 @@ case_skills_frontmatter() {
   report skills_frontmatter "$ok" "bad frontmatter:$why"; record skills_frontmatter
 }
 
+# Workflow lint: the same pinned tools as selftest.yml, on a copy of the workflows.
+ACTIONLINT="uvx --from actionlint-py==1.7.12.25 actionlint -no-color"
+ZIZMOR="uvx zizmor==1.32.0 --offline"
+
+case_workflows_lint_clean() {
+  local dir="$WORK/workflows_lint_clean"
+  mkdir -p "$dir"; cp -R "$ROOT/.github" "$dir/"; cd "$dir"; git init -q
+  set +e; { $ACTIONLINT && $ZIZMOR .github/workflows; } > "$WORK/out.log" 2>&1; local rc=$?; set -e
+  if [ "$rc" -eq 0 ]; then report workflows_lint_clean 1 ""; else report workflows_lint_clean 0 "workflow lint failed on the template's own workflows"; fi
+  record workflows_lint_clean
+}
+
+case_workflows_lint_catches_bad_expression() {
+  local dir="$WORK/workflows_lint_bad"
+  mkdir -p "$dir"; cp -R "$ROOT/.github" "$dir/"; cd "$dir"; git init -q
+  # A typo in a context name: valid YAML, so only an expression-aware linter sees it.
+  sed -i.bak 's/steps.cfg.outputs.ts_dir/steps.cgf.outputs.ts_dir/' .github/workflows/verify.yml
+  rm .github/workflows/verify.yml.bak
+  set +e; $ACTIONLINT > "$WORK/out.log" 2>&1; local rc=$?; set -e
+  if [ "$rc" -ne 0 ] && grep -q 'cgf' "$WORK/out.log"; then report workflows_lint_catches_bad_expression 1 ""
+  else report workflows_lint_catches_bad_expression 0 "actionlint did not flag the bad expression (exit $rc)"; fi
+  record workflows_lint_catches_bad_expression
+}
+
+case_workflows_lint_catches_injection() {
+  local dir="$WORK/workflows_lint_injection"
+  mkdir -p "$dir"; cp -R "$ROOT/.github" "$dir/"; cd "$dir"; git init -q
+  # A PR title interpolated straight into a shell script: the classic injection.
+  cat >> .github/workflows/verify.yml <<'EOF'
+      - name: Echo the title
+        run: echo "${{ github.event.pull_request.title }}"
+EOF
+  set +e; $ZIZMOR .github/workflows > "$WORK/out.log" 2>&1; local rc=$?; set -e
+  if [ "$rc" -ne 0 ] && grep -q 'template-injection' "$WORK/out.log"; then report workflows_lint_catches_injection 1 ""
+  else report workflows_lint_catches_injection 0 "zizmor did not flag the injection (exit $rc)"; fi
+  record workflows_lint_catches_injection
+}
+
 case_skills_linked() {
   # Skills live in .agents/skills (Codex reads it); Claude Code reads only .claude/skills,
   # so each skill needs a relative symlink there, and each symlink needs a skill.
@@ -706,7 +744,8 @@ case_infrastructure_calls_fetch_ok() {
   record infrastructure_calls_fetch_ok
 }
 
-ALL_CASES="skills_frontmatter skills_linked empty_profiles unknown_profile missing_verify_env missing_package_script
+ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
+  workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
   missing_required_dir domain_imports_infrastructure domain_type_import_infrastructure
   skip_without_reason skip_with_reason suppression_without_reason suppression_with_reason

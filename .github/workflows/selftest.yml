@@ -35,8 +35,12 @@ jobs:
       - name: Install sample project dependencies
         working-directory: selftest/ts-sample
         run: npm ci --no-audit --no-fund
+      - name: Install gitleaks and lychee
+        run: |
+          scripts/ci-install-tool.sh gitleaks
+          scripts/ci-install-tool.sh lychee
       - name: shellcheck
-        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh
+        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh selftest/agent-eval.sh
       # actionlint checks workflow syntax and expressions (verify.yml never runs here);
       # zizmor checks workflow security. Pinned; bump both by hand.
       - name: Lint workflows

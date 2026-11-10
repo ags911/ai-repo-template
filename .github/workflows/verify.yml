@@ -61,6 +61,13 @@ jobs:
         working-directory: ${{ steps.cfg.outputs.py_dir }}
         run: uv sync --frozen
 
+      - name: Install gitleaks
+        if: contains(steps.cfg.outputs.profiles, 'secrets')
+        run: scripts/ci-install-tool.sh gitleaks
+      - name: Install lychee
+        if: contains(steps.cfg.outputs.profiles, 'links')
+        run: scripts/ci-install-tool.sh lychee
+
       - name: Verify
         env:
           EVENT: ${{ github.event_name }}

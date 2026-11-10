@@ -41,7 +41,8 @@ Produces one new ADR file with status **Proposed** and one new row in the decisi
    (`Supersedes ADR-XXXX`). Do not change the old ADR's status. List it under "Needs a human"
    in your output so a person updates it when they accept this one.
 6. **Add the index row** to the table in `docs/adr/README.md`, in number order:
-   `| NNNN | <title> | Proposed |`. Change nothing else in the index.
+   `| [NNNN](NNNN-short-title.md) | <title> | Proposed |`, linking the new file. Change
+   nothing else in the index.
 
 ## Output
 Reply with:

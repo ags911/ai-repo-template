@@ -29,3 +29,35 @@ jobs:
         run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh
       - name: Run selftest
         run: selftest/run.sh
+
+  # The skills module keeps skills in .agents/skills with symlinks in .claude/skills.
+  # Proves the README's Windows advice: with core.symlinks on, every skill resolves;
+  # without it, git writes the links as small text files.
+  windows-symlinks:
+    if: ${{ github.event.repository.is_template }}
+    runs-on: windows-latest
+    steps:
+      - name: Turn on symlinks in git (the README's Windows step)
+        run: git config --global core.symlinks true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Every skill resolves through .claude/skills
+        shell: bash
+        run: |
+          n=0
+          for d in modules/skills/.agents/skills/*/; do
+            s=$(basename "$d")
+            f="modules/skills/.claude/skills/$s/SKILL.md"
+            grep -q '^name: '"$s" "$f" || { echo "::error::$f does not resolve"; exit 1; }
+            n=$((n + 1))
+          done
+          [ "$n" -gt 0 ] || { echo "::error::no skills found"; exit 1; }
+          echo "$n skills resolve with core.symlinks=true"
+      - name: Without symlinks the links are plain text files
+        shell: bash
+        run: |
+          git -c core.symlinks=false clone -q "file://$PWD" ../nolinks
+          link=../nolinks/modules/skills/.claude/skills/adr-builder
+          [ -f "$link" ] && [ ! -d "$link" ] || { echo "::error::expected a plain file at $link"; exit 1; }
+          echo "core.symlinks=false gives a text file containing: $(cat "$link")"

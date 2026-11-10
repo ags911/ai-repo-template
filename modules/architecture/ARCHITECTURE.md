@@ -9,16 +9,18 @@ One deployable unit, split into modules with explicit public interfaces.
 Choose when: one team, one database, modules not yet stable, or no need for independent scaling or deploys.
 
 - Modules call each other in-process, only through each module's public interface.
-- No module reads another module's tables directly.
-- Events between modules are optional; use them for genuine fan-out, not by default.
+  (Enforced once the Modules table is turned into boundary rules: `fitness-function-generator`.)
+- No module reads another module's tables directly. (unenforced)
+- Events between modules are optional; use them for genuine fan-out, not by default. (unenforced)
 
 ## Profile B: Distributed services
 Several independently deployable services.
 Choose when: independent scaling, deploy cadence, or ownership is a demonstrated need.
 
 - Services communicate asynchronously by default. Synchronous calls between services need an ADR.
-- Each service owns its data; no shared database.
-- Event payloads carry an id and a UTC timestamp.
+  (unenforced)
+- Each service owns its data; no shared database. (unenforced)
+- Event payloads carry an id and a UTC timestamp. (unenforced; a schema test can enforce it)
 
 ---
 

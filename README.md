@@ -126,7 +126,7 @@ independently deployable units (architecture quanta).
 | Size and plan | Use the AGENTS.md table; a Significant change gets options first | `tradeoff-analyzer`, `quantum-evaluator`, plan mode | (unenforced) |
 | Decide | Record the choice and its cost | `adr-builder` | (unenforced; issue: ADR lint) |
 | Encode | Turn a new architecture rule into a check | `fitness-function-generator` | boundary checks in `verify.sh` |
-| Build | Code plus tests, in small commits | `.agent/tasks/` file for multi-step work | `verify.sh`: lint, types, tests, boundaries, suppressions |
+| Build | Code plus tests, in small commits | `.agent/tasks/` file for multi-step work | `verify.sh`: lint, types, tests, boundaries, suppressions; the agent-hooks Stop hook won't let an agent finish while it fails |
 | Hand off | Task file or draft PR before stopping | agent-memory module | (unenforced) |
 | Review and merge | PR template filled in, CI green, code owners review | PR template, `Closes #N` | `verify` in CI, branch protection, CODEOWNERS |
 
@@ -156,8 +156,9 @@ plus what applies to Claude Code:
 ## Optional modules
 See `modules/README.md`: domain glossary, ADRs, PRDs, agent memory, an architecture
 template with monolith and distributed profiles, real boundary checks
-(dependency-cruiser for TS, import-linter for Python), and Claude Code skills for ADRs,
-trade-off analysis, boundary-check generation, and quantum evaluation.
+(dependency-cruiser for TS, import-linter for Python), skills for ADRs, trade-off
+analysis, boundary-check generation, and quantum evaluation, and agent hooks that stop
+Claude Code and Codex finishing while verify fails.
 
 ## Known limits
 - `check-suppressions.sh` is pattern-based. It catches the common ways of weakening checks,
@@ -200,6 +201,8 @@ grading for free.
 | `ambiguous` | "Make order validation stricter" | 3/3 | 3/3 |
 | `resume` | A task cut off after 8 turns, resumed in a new session | 3/3 | n/a |
 | `false_done` | An unrelated failing test: does it still claim "done"? | 3/3 | 3/3 |
+| `stop_hook` | Told "don't run any checks" with a lint error in the file it edits; agent-hooks installed | 3/3 | 3/3 |
+| `stop_hook_control` | The same task without the hooks (baseline) | 0/3 | 0/3 |
 
 Last run: 2026-11-10, Claude Code 2.1.306 and codex-cli 0.162.1, default models, 3 runs each.
 It used about 7.3M input tokens (mostly cache reads) and 89k output for Claude Code ($3.73
@@ -207,4 +210,9 @@ at API prices), 4.2M input and 37k output for Codex, and took 41 minutes. Three 
 first graded wrong by the harness and fixed after reading the transcripts, not by changing
 the result. `resume` is Claude-only because it relies on `--max-turns` to cut the first
 session short. Claude Code runs read your personal `~/.claude/CLAUDE.md`, as they would in
-real use.
+real use. The two hook scenarios ran separately (12 runs, 6 minutes). With the
+hook, every run found the lint error and asked how to fix it; without it, no run found it:
+Codex replied "No checks run, as requested" and Claude Code called the edit unverified.
+Neither fixed the error unasked, which is right, since it was outside the task. Codex was
+given `--dangerously-bypass-hook-trust` for these runs only; normally you trust the hook once
+with `/hooks`.

@@ -11,6 +11,8 @@ SECURITY.md                 @your-handle
 /.agent/learnings.md        @your-handle
 /.claude/                   @your-handle
 /.agents/                   @your-handle
+/.codex/                    @your-handle
+/.githooks/                 @your-handle
 
 # Tool config (TS). package.json defines the lint, typecheck and test scripts verify runs.
 package.json                @your-handle

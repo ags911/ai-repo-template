@@ -1,0 +1,16 @@
+{
+  "description": "Block finishing a turn that left changes while ./scripts/verify.sh fails.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'exec \"$(git rev-parse --show-toplevel)/scripts/agent-stop-check.sh\"'",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

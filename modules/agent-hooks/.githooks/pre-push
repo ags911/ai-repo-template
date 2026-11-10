@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs verify before every push, whoever or whatever is pushing.
+# Turn it on once per clone: git config core.hooksPath .githooks
+# `git push --no-verify` skips it; CI is still the gate.
+exec "$(git rev-parse --show-toplevel)/scripts/verify.sh"

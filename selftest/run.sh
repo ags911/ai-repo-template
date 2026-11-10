@@ -808,6 +808,82 @@ case_links_missing_tool() {
   record links_missing_tool
 }
 
+# --- agent-hooks module ----------------------------------------------------------------
+
+# with_hooks: install modules/agent-hooks into the current scratch repo.
+with_hooks() {
+  cp -R "$ROOT/modules/agent-hooks/." .
+  git add -A; commit "install agent-hooks"
+}
+
+# stop_hook NAME INPUT_JSON: run the Stop hook the way Claude Code or Codex would.
+stop_hook() {
+  set +e
+  printf '%s' "$2" | env CI=false BASE_REF=main ./scripts/agent-stop-check.sh > "$WORK/out.log" 2>&1
+  local rc=$?
+  set -e
+  return "$rc"
+}
+
+case_stop_hook_clean_tree_silent() {
+  new_repo stop_hook_clean_tree_silent; with_hooks
+  stop_hook x '{"stop_hook_active": false}'
+  if [ ! -s "$WORK/out.log" ]; then report stop_hook_clean_tree_silent 1 ""
+  else report stop_hook_clean_tree_silent 0 "hook printed output with nothing changed"; fi
+  record stop_hook_clean_tree_silent
+}
+
+case_stop_hook_passing_verify_silent() {
+  new_repo stop_hook_passing_verify_silent; with_hooks
+  printf 'export const label = "orders";\n' > src/domain/label.ts
+  stop_hook x '{"stop_hook_active": false}'
+  if [ ! -s "$WORK/out.log" ]; then report stop_hook_passing_verify_silent 1 ""
+  else report stop_hook_passing_verify_silent 0 "hook blocked although verify passes"; fi
+  record stop_hook_passing_verify_silent
+}
+
+case_stop_hook_blocks_failing_verify() {
+  new_repo stop_hook_blocks_failing_verify; with_hooks
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts
+  stop_hook x '{"session_id": "s", "stop_hook_active": false}'
+  if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d.get("decision")=="block" and "verify" in d.get("reason","") else 1)' "$WORK/out.log" 2>/dev/null; then
+    report stop_hook_blocks_failing_verify 1 ""
+  else report stop_hook_blocks_failing_verify 0 "expected a block decision with verify's output"; fi
+  record stop_hook_blocks_failing_verify
+}
+
+case_stop_hook_lets_second_stop_through() {
+  new_repo stop_hook_lets_second_stop_through; with_hooks
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts
+  stop_hook x '{"session_id": "s", "stop_hook_active": true}'
+  if [ ! -s "$WORK/out.log" ]; then report stop_hook_lets_second_stop_through 1 ""
+  else report stop_hook_lets_second_stop_through 0 "hook blocked again after stop_hook_active (would loop)"; fi
+  record stop_hook_lets_second_stop_through
+}
+
+case_pre_push_blocks_failing_verify() {
+  new_repo pre_push_blocks_failing_verify; with_hooks
+  git init -q --bare "$WORK/pre_push_remote.git"; git remote add origin "$WORK/pre_push_remote.git"
+  git config core.hooksPath .githooks
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts; git add -A; commit "bad"
+  set +e; env CI=false BASE_REF=main git push -q origin work > "$WORK/out.log" 2>&1; local rc=$?; set -e
+  if [ "$rc" -ne 0 ] && ! git ls-remote --exit-code origin work >/dev/null 2>&1; then
+    report pre_push_blocks_failing_verify 1 ""
+  else report pre_push_blocks_failing_verify 0 "push went through with verify failing"; fi
+  record pre_push_blocks_failing_verify
+}
+
+case_pre_push_allows_passing_verify() {
+  new_repo pre_push_allows_passing_verify; with_hooks
+  git init -q --bare "$WORK/pre_push_ok.git"; git remote add origin "$WORK/pre_push_ok.git"
+  git config core.hooksPath .githooks
+  set +e; env CI=false BASE_REF=main git push -q origin work > "$WORK/out.log" 2>&1; local rc=$?; set -e
+  if [ "$rc" -eq 0 ] && git ls-remote --exit-code origin work >/dev/null 2>&1; then
+    report pre_push_allows_passing_verify 1 ""
+  else report pre_push_allows_passing_verify 0 "push blocked although verify passes (exit $rc)"; fi
+  record pre_push_allows_passing_verify
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -832,7 +908,9 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   domain_calls_global_fetch application_reads_process_env domain_uses_globalthis_fetch
   infrastructure_calls_fetch_ok
   secrets_clean_pass secrets_catches_token secrets_catches_committed_token secrets_ignores_gitignored
-  secrets_missing_tool links_clean_pass links_missing_file links_missing_anchor links_missing_tool"
+  secrets_missing_tool links_clean_pass links_missing_file links_missing_anchor links_missing_tool
+  stop_hook_clean_tree_silent stop_hook_passing_verify_silent stop_hook_blocks_failing_verify
+  stop_hook_lets_second_stop_through pre_push_blocks_failing_verify pre_push_allows_passing_verify"
 
 ran=0
 for name in $ALL_CASES; do

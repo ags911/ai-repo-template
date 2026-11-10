@@ -37,6 +37,12 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: shellcheck
         run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh
+      # actionlint checks workflow syntax and expressions (verify.yml never runs here);
+      # zizmor checks workflow security. Pinned; bump both by hand.
+      - name: Lint workflows
+        run: |
+          uvx --from actionlint-py==1.7.12.25 actionlint -no-color
+          uvx zizmor==1.32.0 --offline .github/workflows
       - name: Run selftest
         run: selftest/run.sh
 

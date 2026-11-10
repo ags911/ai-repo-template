@@ -30,9 +30,11 @@ jobs:
         id: cfg
         run: |
           source .verify.env
-          echo "profiles=$VERIFY_PROFILES" >> "$GITHUB_OUTPUT"
-          echo "ts_dir=$TS_DIR" >> "$GITHUB_OUTPUT"
-          echo "py_dir=$PY_DIR" >> "$GITHUB_OUTPUT"
+          {
+            echo "profiles=$VERIFY_PROFILES"
+            echo "ts_dir=$TS_DIR"
+            echo "py_dir=$PY_DIR"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: contains(steps.cfg.outputs.profiles, 'ts')

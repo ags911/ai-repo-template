@@ -16,7 +16,9 @@ Do not, without explicit approval from a human in this conversation:
 - edit files listed in `.github/CODEOWNERS`
 
 If a check fails and the fix is unclear, stop and explain the failure. A justified
-suppression must carry `reason:` (or `reason=` in Python skip markers) on the same line.
+suppression must carry a comment with `reason:` and the reason (or `reason="..."` in
+Python skip markers) on the same line. A human approves deleting a test by adding its path
+to `.verify-approvals`; never add lines there yourself.
 
 ## Scale process to the change
 | Change | Examples | Required |

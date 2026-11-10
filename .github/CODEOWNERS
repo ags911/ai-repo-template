@@ -6,6 +6,7 @@ AGENTS.md                   @your-handle
 CLAUDE.md                   @your-handle
 SECURITY.md                 @your-handle
 /.verify.env                @your-handle
+/.verify-approvals          @your-handle
 /scripts/                   @your-handle
 /.github/                   @your-handle
 /.agent/learnings.md        @your-handle

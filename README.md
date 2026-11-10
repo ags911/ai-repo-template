@@ -11,6 +11,7 @@ real need shows up. Supports TypeScript and Python projects, separately or side 
 | `scripts/verify.sh` | The single verification command, run identically locally and in CI. |
 | `scripts/profiles/` | One script per stack (`ts`, `python`) or extra check (`secrets`: gitleaks, `links`: lychee). Missing tools or scripts fail; they never fall through. |
 | `scripts/check-suppressions.sh` | Tripwire for added skips, suppressions, and deleted or renamed-away tests. |
+| `.verify-approvals` | Test files a human has approved removing, one path per line. Code-owner reviewed. |
 | `scripts/ci-base-ref.sh` | Picks the diff base for that check in CI (PR base, the pre-push commit, or the empty tree on a first push). |
 | `.github/workflows/verify.yml` | Runs `verify.sh` on every PR and push to main. |
 | `.github/CODEOWNERS` | Requires human review for changes to rules, checks, and tool config. |

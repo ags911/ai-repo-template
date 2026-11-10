@@ -9,16 +9,29 @@ source .verify.env
 fail() { echo "SECRETS PROFILE FAILED: $*" >&2; exit 1; }
 command -v gitleaks >/dev/null || fail "gitleaks is not installed"
 
+empty_tree=$(git hash-object -t tree /dev/null)
 base="${BASE_REF:-origin/main}"
-if ! git rev-parse --verify --quiet "$base" >/dev/null; then
+# The base must exist as an object; rev-parse --verify accepts any 40-hex string.
+if ! git cat-file -e "${base}^{tree}" 2>/dev/null; then
   [ "${CI:-}" = "true" ] && fail "base ref '$base' not found in CI (fetch it with fetch-depth: 0)"
-  echo "WARNING: base ref '$base' not found locally; scanning all tracked files"
-  base=$(git hash-object -t tree /dev/null)
+  echo "WARNING: base ref '$base' not found locally; scanning all tracked files and history"
+  base="$empty_tree"
 fi
 
+scan() { gitleaks "$@" --no-banner --redact --verbose --log-level warn; }
+
+# 1. The end state: tracked changes since the base plus new untracked files. --text and no
+#    diff drivers, so a .gitattributes "-diff" entry can't hide lines.
+diff_out=$(git diff --text --no-ext-diff --no-textconv "$base" -U0)
 {
-  git diff "$base" -U0 | grep -E '^\+[^+]' || true
+  printf '%s\n' "$diff_out" | grep -E '^\+[^+]' || true
   git ls-files --others --exclude-standard -z | xargs -0 -r cat 2>/dev/null || true
-} | gitleaks stdin --no-banner --redact --verbose --log-level warn \
-  || fail "possible secret in the changes (shown redacted above)"
+} | scan stdin || fail "possible secret in the changes (shown redacted above)"
+
+# 2. Every commit since the base: a secret added in one commit and removed in the next is
+#    gone from the end state but still in the pushed history.
+if [ -n "$(git rev-list -1 HEAD 2>/dev/null)" ]; then
+  if [ "$base" = "$empty_tree" ]; then range="HEAD"; else range="$base..HEAD"; fi
+  scan git --log-opts="--text $range" . || fail "possible secret in a commit since the base (shown redacted above)"
+fi
 echo "ok"

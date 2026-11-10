@@ -884,6 +884,88 @@ case_pre_push_allows_passing_verify() {
   record pre_push_allows_passing_verify
 }
 
+# --- audit findings (Codex review, 2026-11-10) -----------------------------------------
+
+case_base_object_missing_ci() {
+  # A 40-hex base that names no object must fail in CI, not pass with nothing checked.
+  new_repo base_object_missing_ci
+  printf 'import { test } from "node:test";\n%s\n' "$TS_SKIP" > src/domain/pending.test.ts
+  expect base_object_missing_ci fail "not found in CI" CI=true BASE_REF=1111111111111111111111111111111111111111
+  record base_object_missing_ci
+}
+
+case_binary_attribute_hides_skip() {
+  # A .gitattributes "-diff" entry must not hide an added skip from the diff.
+  new_repo binary_attribute_hides_skip
+  printf 'src/domain/order.test.ts -diff\n' > .gitattributes
+  printf '%s\n' "$TS_SKIP" >> src/domain/order.test.ts
+  git add -A; commit "hide skip behind -diff"
+  expect binary_attribute_hides_skip fail "without 'reason:'"; record binary_attribute_hides_skip
+}
+
+case_skip_option_without_reason() {
+  new_repo skip_option_without_reason
+  printf 'import { test } from "node:test";\ntest("pending", { sk''ip: true }, () => {});\n' > src/domain/pending.test.ts
+  expect skip_option_without_reason fail "without 'reason:'"; record skip_option_without_reason
+}
+
+case_gitleaks_allow_without_reason() {
+  new_repo gitleaks_allow_without_reason
+  printf 'export const k = "not-a-secret"; // gitleaks:al''low\n' > src/infrastructure/k.ts
+  expect gitleaks_allow_without_reason fail "without 'reason:'"; record gitleaks_allow_without_reason
+}
+
+case_reason_in_test_name_not_enough() {
+  # "reason:" inside a string is not a reason; it has to be a comment (or reason="...").
+  new_repo reason_in_test_name_not_enough
+  printf 'import { test } from "node:test";\ntest.sk''ip("reason: none", () => {});\n' > src/domain/pending.test.ts
+  expect reason_in_test_name_not_enough fail "without 'reason:'"; record reason_in_test_name_not_enough
+}
+
+case_empty_reason_not_enough() {
+  new_repo empty_reason_not_enough
+  printf 'import { test } from "node:test";\n%s // reason:\n' "$TS_SKIP" > src/domain/pending.test.ts
+  expect empty_reason_not_enough fail "without 'reason:'"; record empty_reason_not_enough
+}
+
+case_test_renamed_to_bak_in_tests_dir() {
+  new_py_repo test_renamed_to_bak_in_tests_dir
+  git mv tests/test_orders.py tests/test_orders.py.bak; commit "hide python test"
+  expect test_renamed_to_bak_in_tests_dir fail "test files deleted"; record test_renamed_to_bak_in_tests_dir
+}
+
+case_approved_test_deletion() {
+  new_repo approved_test_deletion
+  printf '# Approved removals\nsrc/domain/order.test.ts  # replaced by property tests, approved in PR review\n' > .verify-approvals
+  git rm -q src/domain/order.test.ts; git add -A; commit "remove approved test"
+  expect approved_test_deletion pass "VERIFY PASSED"; record approved_test_deletion
+}
+
+case_unapproved_deletion_with_other_approval() {
+  new_repo unapproved_deletion_with_other_approval
+  printf 'src/domain/other.test.ts\n' > .verify-approvals
+  git rm -q src/domain/order.test.ts; git add -A; commit "remove unapproved test"
+  expect unapproved_deletion_with_other_approval fail "test files deleted"; record unapproved_deletion_with_other_approval
+}
+
+case_secrets_in_intermediate_commit() {
+  # Added in one commit, removed in the next: gone from the end state, still in history.
+  new_repo secrets_in_intermediate_commit; set_env VERIFY_PROFILES "ts secrets"
+  git add -A; commit "enable secrets"
+  printf 'export const token = "%s";\n' "$(fake_token)" > src/infrastructure/config.ts
+  git add -A; commit "add token"
+  git rm -q src/infrastructure/config.ts; commit "remove token"
+  expect secrets_in_intermediate_commit fail "SECRETS PROFILE FAILED"; record secrets_in_intermediate_commit
+}
+
+case_secrets_behind_binary_attribute() {
+  new_repo secrets_behind_binary_attribute; set_env VERIFY_PROFILES "ts secrets"
+  printf 'src/infrastructure/config.ts -diff\n' > .gitattributes
+  printf 'export const token = "%s";\n' "$(fake_token)" > src/infrastructure/config.ts
+  git add -A; commit "token behind -diff"
+  expect secrets_behind_binary_attribute fail "SECRETS PROFILE FAILED"; record secrets_behind_binary_attribute
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -910,7 +992,11 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   secrets_clean_pass secrets_catches_token secrets_catches_committed_token secrets_ignores_gitignored
   secrets_missing_tool links_clean_pass links_missing_file links_missing_anchor links_missing_tool
   stop_hook_clean_tree_silent stop_hook_passing_verify_silent stop_hook_blocks_failing_verify
-  stop_hook_lets_second_stop_through pre_push_blocks_failing_verify pre_push_allows_passing_verify"
+  stop_hook_lets_second_stop_through pre_push_blocks_failing_verify pre_push_allows_passing_verify
+  base_object_missing_ci binary_attribute_hides_skip skip_option_without_reason
+  gitleaks_allow_without_reason reason_in_test_name_not_enough empty_reason_not_enough
+  test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
+  secrets_in_intermediate_commit secrets_behind_binary_attribute"
 
 ran=0
 for name in $ALL_CASES; do

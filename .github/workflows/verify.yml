@@ -1,0 +1,60 @@
+name: verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # The template repo itself has no profile configured (VERIFY_PROFILES is empty on
+    # purpose), so verify only runs in repos created from it. selftest.yml covers the template.
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    steps:
+      # Actions are pinned to full commit SHAs; the comment records the release.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # check-suppressions.sh needs the base commit
+          persist-credentials: false
+
+      - name: Read profiles
+        id: cfg
+        run: |
+          source .verify.env
+          echo "profiles=$VERIFY_PROFILES" >> "$GITHUB_OUTPUT"
+          echo "ts_dir=$TS_DIR" >> "$GITHUB_OUTPUT"
+          echo "py_dir=$PY_DIR" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: contains(steps.cfg.outputs.profiles, 'ts')
+        with:
+          node-version-file: ${{ steps.cfg.outputs.ts_dir }}/.nvmrc
+      - name: Install JS dependencies
+        if: contains(steps.cfg.outputs.profiles, 'ts')
+        working-directory: ${{ steps.cfg.outputs.ts_dir }}
+        run: |
+          if   [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lockfile
+          elif [ -f yarn.lock ];      then corepack enable && yarn install --immutable
+          else npm ci
+          fi
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: contains(steps.cfg.outputs.profiles, 'python')
+      - name: Install Python dependencies
+        if: contains(steps.cfg.outputs.profiles, 'python')
+        working-directory: ${{ steps.cfg.outputs.py_dir }}
+        run: uv sync --frozen
+
+      - name: Verify
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}  # all zeros on the first push to main
+        run: |
+          BASE_REF=$(scripts/ci-base-ref.sh)
+          export BASE_REF
+          echo "suppression check base: $BASE_REF"
+          ./scripts/verify.sh

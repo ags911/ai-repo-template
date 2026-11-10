@@ -1,0 +1,90 @@
+[importlinter]
+root_package = app
+# Needed for the two contracts at the end, which forbid outside packages.
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layer rules from ARCHITECTURE.md
+type = layers
+layers =
+    app.presentation
+    app.application
+    app.domain
+
+[importlinter:contract:domain-pure]
+name = Domain does not import infrastructure
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    app.infrastructure
+
+[importlinter:contract:application-not-infra]
+name = Application does not import infrastructure
+type = forbidden
+source_modules =
+    app.application
+forbidden_modules =
+    app.infrastructure
+
+[importlinter:contract:presentation-not-infra]
+name = Presentation does not import infrastructure
+type = forbidden
+source_modules =
+    app.presentation
+forbidden_modules =
+    app.infrastructure
+
+# Infrastructure packages: drivers, ORMs, web frameworks, HTTP clients, cloud SDKs.
+# Domain and application must not import them. Edit this list for your project.
+# import-linter only accepts top-level names here (azure, not azure.storage).
+[importlinter:contract:core-no-infra-packages]
+name = Domain and application do not import infrastructure packages
+type = forbidden
+source_modules =
+    app.domain
+    app.application
+forbidden_modules =
+    psycopg
+    psycopg2
+    asyncpg
+    pymysql
+    MySQLdb
+    sqlite3
+    pymongo
+    motor
+    redis
+    sqlalchemy
+    sqlmodel
+    peewee
+    tortoise
+    alembic
+    django
+    flask
+    fastapi
+    starlette
+    aiohttp
+    requests
+    httpx
+    urllib3
+    grpc
+    boto3
+    botocore
+    azure
+
+# Standard-library modules for network, process and file-system I/O.
+[importlinter:contract:core-no-io-modules]
+name = Domain and application do not do I/O directly
+type = forbidden
+source_modules =
+    app.domain
+    app.application
+forbidden_modules =
+    socket
+    ssl
+    http
+    ftplib
+    smtplib
+    subprocess
+    multiprocessing
+    shutil

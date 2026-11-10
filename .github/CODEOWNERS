@@ -1,0 +1,28 @@
+# Changes to the rules, the checks, and the test setup need human review.
+# Replace @your-handle. Enforcing this needs branch protection or a ruleset with "Require
+# review from Code Owners", which private repos only get on paid plans (see README).
+# Patterns without a leading / match at any depth, so monorepo apps (web/, agent/) count.
+AGENTS.md                   @your-handle
+CLAUDE.md                   @your-handle
+SECURITY.md                 @your-handle
+/.verify.env                @your-handle
+/scripts/                   @your-handle
+/.github/                   @your-handle
+/.agent/learnings.md        @your-handle
+/.claude/                   @your-handle
+/.agents/                   @your-handle
+
+# Tool config (TS). package.json defines the lint, typecheck and test scripts verify runs.
+package.json                @your-handle
+eslint.config.*             @your-handle
+eslint.boundaries.*         @your-handle
+tsconfig*.json              @your-handle
+.dependency-cruiser.*       @your-handle
+vitest.config.*             @your-handle
+jest.config.*               @your-handle
+
+# Tool config (Python)
+pyproject.toml              @your-handle
+.importlinter               @your-handle
+conftest.py                 @your-handle
+test_core_io.py             @your-handle

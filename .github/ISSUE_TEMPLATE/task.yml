@@ -1,0 +1,27 @@
+name: Task
+description: A piece of work small enough for one PR. Written so an agent can start from it alone.
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true when this is done, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done means
+      description: Checks that prove it, e.g. "verify passes and a test shows X fails before the fix".
+    validations:
+      required: true
+  - type: textarea
+    id: area
+    attributes:
+      label: Files or area
+      description: Where the change goes. Mention any ADR, PRD, or ARCHITECTURE.md rule that applies.
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What not to change.

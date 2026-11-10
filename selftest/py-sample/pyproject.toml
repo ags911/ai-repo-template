@@ -1,0 +1,17 @@
+[project]
+name = "py-sample"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[dependency-groups]
+dev = ["ruff==0.17.4", "mypy==2.4.1", "pytest==9.2.0", "import-linter==2.16"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true

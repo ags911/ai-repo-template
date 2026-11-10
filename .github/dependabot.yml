@@ -1,0 +1,9 @@
+# Keeps the SHA-pinned Actions current. Dependabot updates the commit SHA and the
+# same-line version comment (`@<sha> # v7.0.1`). Add your own package ecosystems
+# (npm, pip/uv) below if you want dependency update PRs too.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

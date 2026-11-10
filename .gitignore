@@ -1,0 +1,4 @@
+# Per-task agent state: local and disposable, never shared across branches
+.agent/tasks/
+
+.context/

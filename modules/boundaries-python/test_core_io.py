@@ -44,16 +44,18 @@ def _banned(module: str) -> str | None:
 
 
 def _bound_names(tree: ast.Module) -> set[str]:
+    """Names bound at the top level of the module. A method or nested function named
+    `open` doesn't shadow the builtin elsewhere in the file, so it doesn't count."""
     names: set[str] = set()
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names.add(node.name)
-        elif isinstance(node, ast.arg):
-            names.add(node.arg)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            names.add(node.id)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             names.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                names.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
     return names
 
 

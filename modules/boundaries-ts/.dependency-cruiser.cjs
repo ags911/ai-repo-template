@@ -53,7 +53,8 @@ module.exports = {
       from: { path: "^src/(domain|application)" },
       to: {
         dependencyTypes: ["core"],
-        path: "^(node:)?(fs|fs/promises|http|https|http2|net|tls|dgram|dns|child_process|cluster|worker_threads)$",
+        // Subpaths are listed explicitly; dependency-cruiser rejects nested repetition as unsafe.
+        path: "^(node:)?(fs|fs/promises|http|https|http2|net|tls|dgram|dns|dns/promises|child_process|cluster|worker_threads)$",
       },
     },
     {

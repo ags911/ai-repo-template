@@ -987,6 +987,43 @@ case_py_lockfile_out_of_date() {
   record py_lockfile_out_of_date
 }
 
+case_stop_hook_blocks_committed_failure() {
+  # Committing a broken change and then stopping must not get past the hook.
+  new_repo stop_hook_blocks_committed_failure; with_hooks
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts; git add -A; commit "bad, but committed"
+  stop_hook x '{"stop_hook_active": false}'
+  if grep -q '"decision": "block"' "$WORK/out.log"; then report stop_hook_blocks_committed_failure 1 ""
+  else report stop_hook_blocks_committed_failure 0 "a committed failure got past the hook"; fi
+  record stop_hook_blocks_committed_failure
+}
+
+case_stop_hook_remembers_pass() {
+  # After a pass, the same state isn't verified again; a change is.
+  new_repo stop_hook_remembers_pass; with_hooks
+  printf 'export const label = "orders";\n' > src/domain/label.ts
+  stop_hook x '{"stop_hook_active": false}'
+  local ok; ok=$(git rev-parse --git-path agent-stop-check.ok)
+  local first=no; [ -f "$ok" ] && first=yes
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts
+  stop_hook x '{"stop_hook_active": false}'
+  if [ "$first" = yes ] && grep -q '"decision": "block"' "$WORK/out.log"; then report stop_hook_remembers_pass 1 ""
+  else report stop_hook_remembers_pass 0 "pass not remembered ($first) or later change not re-verified"; fi
+  record stop_hook_remembers_pass
+}
+
+case_py_open_hidden_by_method() {
+  # A method named open must not hide a real open() call in the same file.
+  new_py_repo py_open_hidden_by_method
+  printf 'class Account:\n    def open(self) -> None:\n        pass\n\n\ndef load() -> str:\n    with open("orders.txt") as f:\n        return f.read()\n' > app/domain/mixed.py
+  expect py_open_hidden_by_method fail "calls open()"; record py_open_hidden_by_method
+}
+
+case_domain_imports_io_builtin_subpath() {
+  new_repo domain_imports_io_builtin_subpath
+  printf 'import { lookup } from "node:dns/promises";\nexport const find = lookup;\n' > src/domain/leak.ts
+  expect domain_imports_io_builtin_subpath fail "core-no-io-builtins: src/domain/leak.ts"; record domain_imports_io_builtin_subpath
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -1017,7 +1054,9 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   base_object_missing_ci binary_attribute_hides_skip skip_option_without_reason
   gitleaks_allow_without_reason reason_in_test_name_not_enough empty_reason_not_enough
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
-  secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date"
+  secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date
+  stop_hook_blocks_committed_failure stop_hook_remembers_pass py_open_hidden_by_method
+  domain_imports_io_builtin_subpath"
 
 ran=0
 for name in $ALL_CASES; do

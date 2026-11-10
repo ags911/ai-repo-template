@@ -744,6 +744,70 @@ case_infrastructure_calls_fetch_ok() {
   record infrastructure_calls_fetch_ok
 }
 
+# --- secrets and links profiles --------------------------------------------------------
+
+# fake_token: a GitHub-token-shaped string made at run time, so no secret-shaped literal is
+# ever committed to this repo (GitHub push protection would block it).
+fake_token() { printf 'ghp_%s' "$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 36)"; }
+
+case_secrets_clean_pass() {
+  new_repo secrets_clean_pass; set_env VERIFY_PROFILES "ts secrets"
+  expect secrets_clean_pass pass "=== VERIFY PASSED (ts secrets) ==="; record secrets_clean_pass
+}
+
+case_secrets_catches_token() {
+  new_repo secrets_catches_token; set_env VERIFY_PROFILES "ts secrets"
+  printf 'export const token = "%s";\n' "$(fake_token)" > src/infrastructure/config.ts
+  expect secrets_catches_token fail "SECRETS PROFILE FAILED"; record secrets_catches_token
+}
+
+case_secrets_catches_committed_token() {
+  new_repo secrets_catches_committed_token; set_env VERIFY_PROFILES "ts secrets"
+  printf 'export const token = "%s";\n' "$(fake_token)" > src/infrastructure/config.ts
+  git add -A; commit "add config"
+  expect secrets_catches_committed_token fail "SECRETS PROFILE FAILED"; record secrets_catches_committed_token
+}
+
+case_secrets_ignores_gitignored() {
+  new_repo secrets_ignores_gitignored; set_env VERIFY_PROFILES "ts secrets"
+  printf 'local.env\n' >> .gitignore; git add .gitignore; commit "ignore local.env"
+  printf 'TOKEN=%s\n' "$(fake_token)" > local.env
+  expect secrets_ignores_gitignored pass "=== VERIFY PASSED (ts secrets) ==="; record secrets_ignores_gitignored
+}
+
+case_secrets_missing_tool() {
+  # Profile on its own: gitleaks may share a PATH folder with node.
+  new_repo secrets_missing_tool; set_env VERIFY_PROFILES "secrets"
+  expect secrets_missing_tool fail "gitleaks is not installed" PATH="$(path_without gitleaks)"
+  record secrets_missing_tool
+}
+
+case_links_clean_pass() {
+  new_repo links_clean_pass; set_env VERIFY_PROFILES "ts links"
+  mkdir -p docs; printf '# Guide\n\n## Setup\n' > docs/guide.md
+  printf '# Readme\n\nSee [setup](docs/guide.md#setup) and [the web](https://example.invalid/).\n' > README.md
+  expect links_clean_pass pass "=== VERIFY PASSED (ts links) ==="; record links_clean_pass
+}
+
+case_links_missing_file() {
+  new_repo links_missing_file; set_env VERIFY_PROFILES "ts links"
+  printf '# Readme\n\nSee [the ADR](docs/adr/0002-missing.md).\n' > README.md
+  expect links_missing_file fail "LINKS PROFILE FAILED"; record links_missing_file
+}
+
+case_links_missing_anchor() {
+  new_repo links_missing_anchor; set_env VERIFY_PROFILES "ts links"
+  mkdir -p docs; printf '# Guide\n' > docs/guide.md
+  printf '# Readme\n\nSee [setup](docs/guide.md#setup).\n' > README.md
+  expect links_missing_anchor fail "LINKS PROFILE FAILED"; record links_missing_anchor
+}
+
+case_links_missing_tool() {
+  new_repo links_missing_tool; set_env VERIFY_PROFILES "links"
+  expect links_missing_tool fail "lychee is not installed" PATH="$(path_without lychee)"
+  record links_missing_tool
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -766,7 +830,9 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   py_domain_imports_cloud_subpackage py_application_imports_urllib_request py_domain_imports_os
   py_domain_calls_open py_domain_method_named_open_ok py_infrastructure_imports_os_ok
   domain_calls_global_fetch application_reads_process_env domain_uses_globalthis_fetch
-  infrastructure_calls_fetch_ok"
+  infrastructure_calls_fetch_ok
+  secrets_clean_pass secrets_catches_token secrets_catches_committed_token secrets_ignores_gitignored
+  secrets_missing_tool links_clean_pass links_missing_file links_missing_anchor links_missing_tool"
 
 ran=0
 for name in $ALL_CASES; do

@@ -9,7 +9,7 @@ real need shows up. Supports TypeScript and Python projects, separately or side 
 | `AGENTS.md` | Rules for coding agents. Short on purpose. |
 | `.verify.env` | Declares which stack profiles this repo uses. Nothing is auto-detected. |
 | `scripts/verify.sh` | The single verification command, run identically locally and in CI. |
-| `scripts/profiles/` | One script per stack. Missing tools or scripts fail; they never fall through. |
+| `scripts/profiles/` | One script per stack (`ts`, `python`) or extra check (`secrets`: gitleaks, `links`: lychee). Missing tools or scripts fail; they never fall through. |
 | `scripts/check-suppressions.sh` | Tripwire for added skips, suppressions, and deleted or renamed-away tests. |
 | `scripts/ci-base-ref.sh` | Picks the diff base for that check in CI (PR base, the pre-push commit, or the empty tree on a first push). |
 | `.github/workflows/verify.yml` | Runs `verify.sh` on every PR and push to main. |
@@ -26,8 +26,9 @@ runs on every PR, but nothing stops a merge while it is red or unreviewed.
 
 ## Setup
 1. Copy the core into your repo.
-2. Edit `.verify.env`: set `VERIFY_PROFILES` (`ts`, `python`, or `ts python`) and the project
-   directories. For a monorepo with a Next.js app in `web/` and a Python agent in `agent/`:
+2. Edit `.verify.env`: set `VERIFY_PROFILES` (`ts`, `python`, or both, plus `secrets` and
+   `links` if you want them; install `gitleaks` and `lychee` locally, CI installs pinned
+   copies) and the project directories. For a monorepo with a Next.js app in `web/` and a Python agent in `agent/`:
    `VERIFY_PROFILES="ts python"`, `TS_DIR=web`, `PY_DIR=agent`.
 3. Pin your toolchain: `.nvmrc` in the TS directory (CI reads it), `requires-python`
    in pyproject.toml, and commit lockfiles (`package-lock.json` / `pnpm-lock.yaml`, `uv.lock`).

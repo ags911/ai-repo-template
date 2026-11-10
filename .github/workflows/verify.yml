@@ -7,12 +7,18 @@ on:
 permissions:
   contents: read
 
+# Cancel a PR's older run when a newer commit arrives. Pushes to main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     # The template repo itself has no profile configured (VERIFY_PROFILES is empty on
     # purpose), so verify only runs in repos created from it. selftest.yml covers the template.
     if: ${{ !github.event.repository.is_template }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # GitHub's default is 360; a hung test would burn the free minutes
     steps:
       # Actions are pinned to full commit SHAs; the comment records the release.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,6 +38,9 @@ jobs:
         if: contains(steps.cfg.outputs.profiles, 'ts')
         with:
           node-version-file: ${{ steps.cfg.outputs.ts_dir }}/.nvmrc
+          # Caches npm's download cache when there is a package-lock.json.
+          cache: ${{ hashFiles(format('{0}/package-lock.json', steps.cfg.outputs.ts_dir)) != '' && 'npm' || '' }}
+          cache-dependency-path: ${{ steps.cfg.outputs.ts_dir }}/package-lock.json
       - name: Install JS dependencies
         if: contains(steps.cfg.outputs.profiles, 'ts')
         working-directory: ${{ steps.cfg.outputs.ts_dir }}
@@ -43,6 +52,8 @@ jobs:
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         if: contains(steps.cfg.outputs.profiles, 'python')
+        with:
+          enable-cache: true
       - name: Install Python dependencies
         if: contains(steps.cfg.outputs.profiles, 'python')
         working-directory: ${{ steps.cfg.outputs.py_dir }}

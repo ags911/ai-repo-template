@@ -145,6 +145,10 @@ trade-off analysis, boundary-check generation, and quantum evaluation.
   against the empty tree: every skip or suppression in the initial content needs a reason.
 - Without branch protection (free private repos), CODEOWNERS and the `verify` check are
   advisory: GitHub shows them but doesn't block a merge.
+- Private repos on GitHub Free get $12 of Actions usage a month (about 2,000 Linux minutes).
+  `verify` takes about 2 minutes, and each PR usually triggers 2–4 runs, so that covers
+  roughly 250–500 PRs. Public repos run free. The workflows cancel a PR's superseded runs,
+  cache dependencies, and time out after 15 minutes so a hung test can't use the month up.
 - A force-push to `main` can leave the pre-push commit unfetchable; the suppression check then
   fails in CI rather than passing unchecked.
 

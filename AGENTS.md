@@ -38,7 +38,7 @@ to `.verify-approvals`; never add lines there yourself.
 - When you add a rule to an instructions file or `ARCHITECTURE.md`, name the check that
   enforces it (a test, lint rule, or boundary config), or mark it `(unenforced)`.
 - Database migrations must be backward compatible: expand, migrate data, then contract
-  in a later release. Never rename or drop a column in one step.
+  in a later release. Never rename or drop a column in one step. (unenforced)
 
 ## Where context lives
 Read whichever of these exist before starting.

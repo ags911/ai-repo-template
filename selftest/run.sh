@@ -966,6 +966,16 @@ case_secrets_behind_binary_attribute() {
   expect secrets_behind_binary_attribute fail "SECRETS PROFILE FAILED"; record secrets_behind_binary_attribute
 }
 
+case_gitattributes_keep_lf() {
+  # Every tracked shell script and the verify config must be pinned to LF endings.
+  local f bad="" ; : > "$WORK/out.log"
+  for f in $(cd "$ROOT" && git ls-files '*.sh' .verify.env .verify-approvals '.githooks/*' '**/.githooks/*'); do
+    (cd "$ROOT" && git check-attr eol -- "$f") | grep -q 'eol: lf$' || bad="$bad $f"
+  done
+  if [ -z "$bad" ]; then report gitattributes_keep_lf 1 ""; else report gitattributes_keep_lf 0 "not pinned to LF:$bad"; fi
+  record gitattributes_keep_lf
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -996,7 +1006,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   base_object_missing_ci binary_attribute_hides_skip skip_option_without_reason
   gitleaks_allow_without_reason reason_in_test_name_not_enough empty_reason_not_enough
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
-  secrets_in_intermediate_commit secrets_behind_binary_attribute"
+  secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf"
 
 ran=0
 for name in $ALL_CASES; do

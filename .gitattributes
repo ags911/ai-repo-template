@@ -1,0 +1,7 @@
+# Shell scripts and verify config keep LF line endings on every platform. With CRLF (a
+# Windows checkout with core.autocrlf=true), bash fails on the stray \r.
+*.sh                    text eol=lf
+.verify.env             text eol=lf
+.verify-approvals       text eol=lf
+.githooks/*             text eol=lf
+**/.githooks/*          text eol=lf

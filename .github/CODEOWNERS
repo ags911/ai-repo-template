@@ -15,9 +15,26 @@ SECURITY.md                 @your-handle
 /.codex/                    @your-handle
 /.githooks/                 @your-handle
 
+# Tests. Removing an assertion leaves the file in place, so the tripwire can't see it;
+# review is the backstop.
+*.test.*                    @your-handle
+*.spec.*                    @your-handle
+test_*.py                   @your-handle
+*_test.py                   @your-handle
+tests/                      @your-handle
+__tests__/                  @your-handle
+
+# Repo-wide config that can change what the checks see.
+.gitattributes              @your-handle
+.gitleaks.toml              @your-handle
+.gitleaksignore             @your-handle
+lychee.toml                 @your-handle
+.lycheeignore               @your-handle
+
 # Tool config (TS). package.json defines the lint, typecheck and test scripts verify runs.
 package.json                @your-handle
 eslint.config.*             @your-handle
+.eslintrc*                  @your-handle
 eslint.boundaries.*         @your-handle
 tsconfig*.json              @your-handle
 .dependency-cruiser.*       @your-handle
@@ -26,6 +43,13 @@ jest.config.*               @your-handle
 
 # Tool config (Python)
 pyproject.toml              @your-handle
+pytest.ini                  @your-handle
+mypy.ini                    @your-handle
+.mypy.ini                   @your-handle
+setup.cfg                   @your-handle
+tox.ini                     @your-handle
+ruff.toml                   @your-handle
+.ruff.toml                  @your-handle
 .importlinter               @your-handle
 conftest.py                 @your-handle
 test_core_io.py             @your-handle

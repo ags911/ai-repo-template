@@ -13,7 +13,9 @@ Do not, without explicit approval from a human in this conversation:
 - delete, skip, or loosen tests or assertions (`.skip`, `.only`, `xfail`, removed asserts)
 - add suppressions (`@ts-ignore`, `eslint-disable`, `# type: ignore`, `# noqa`)
 - edit lint, type-check, test, CI, or verification config
-- edit files listed in `.github/CODEOWNERS`
+- edit files listed in `.github/CODEOWNERS`, except test files: adding tests, and updating
+  assertions to match behaviour the task asked you to change, need no approval (deleting,
+  skipping or loosening them does, as above)
 
 If a check fails and the fix is unclear, stop and explain the failure. A justified
 suppression must carry a comment with `reason:` and the reason (or `reason="..."` in

@@ -181,7 +181,7 @@ run_agent() {
       (cd "$dir" && claude -p "$prompt" --output-format stream-json --verbose --max-turns "$turns" \
         --disallowedTools "AskUserQuestion" \
         --allowedTools "Read" "Edit" "Write" "Glob" "Grep" "Bash(./scripts/verify.sh)" \
-          "Bash(npm run *)" "Bash(npm install *)" "Bash(npx *)" "Bash(uv run *)" "Bash(uv add *)" \
+          "Bash(npm run *)" "Bash(npm test*)" "Bash(npm install *)" "Bash(npx *)" "Bash(uv run *)" "Bash(uv add *)" \
           "Bash(git diff *)" "Bash(git status)" "Bash(git log *)" "Bash(ls *)" "Bash(mkdir *)" \
           "Bash(cp *)" "Bash(cat *)" \
         > "$log" 2>&1) || true

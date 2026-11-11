@@ -10,6 +10,8 @@ deployables that can be released, scaled, and fail on their own. It reports
 mismatches between the map and what `ARCHITECTURE.md` (or the team) claims. It does not edit
 `ARCHITECTURE.md`.
 
+Suggested model and effort: most capable model, high effort. It judges coupling from evidence.
+
 ## What makes two deployables one quantum
 Put two deployables in the same quantum when any of these holds. Each one means neither
 can be released or kept running on its own:

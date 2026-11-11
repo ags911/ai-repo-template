@@ -9,6 +9,8 @@ Produces a written proposal for one significant change: the options, what each g
 costs, how reversible each is, a recommendation, and whether an ADR is needed. It writes no
 code and edits no files.
 
+Suggested model and effort: most capable model, high effort. The recommendation is the hard part.
+
 ## Procedure
 1. **State the decision** in one sentence: what has to be chosen, and what forces the choice
    now (a failing requirement, a ticket, a limit being hit). Cite files or issues.

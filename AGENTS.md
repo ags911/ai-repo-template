@@ -24,7 +24,7 @@ to `.verify-approvals`; never add lines there yourself.
 | Change | Examples | Required |
 | --- | --- | --- |
 | Trivial | typo, copy, comment, config value | verify |
-| Standard | bug fix, contained feature | tests for the behaviour changed, verify |
+| Standard | bug fix, contained feature | tests for the behaviour changed (unenforced), verify |
 | Significant | new dependency, schema change, new module or cross-module call, public API change | stop and propose first: options, trade-offs, recommendation. Record an ADR if `docs/adr/` exists |
 
 ## Working rules

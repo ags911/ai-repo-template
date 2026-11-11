@@ -22,6 +22,7 @@ SECURITY.md                 @your-handle
 test_*.py                   @your-handle
 *_test.py                   @your-handle
 tests/                      @your-handle
+test/                       @your-handle
 __tests__/                  @your-handle
 
 # Repo-wide config that can change what the checks see.
@@ -44,6 +45,9 @@ jest.config.*               @your-handle
 # Tool config (Python)
 pyproject.toml              @your-handle
 pytest.ini                  @your-handle
+.pytest.ini                 @your-handle
+pytest.toml                 @your-handle
+.pytest.toml                @your-handle
 mypy.ini                    @your-handle
 .mypy.ini                   @your-handle
 setup.cfg                   @your-handle

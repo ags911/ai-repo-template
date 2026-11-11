@@ -32,6 +32,8 @@ diff_out=$(git diff --text --no-ext-diff --no-textconv "$base" -U0)
 #    gone from the end state but still in the pushed history.
 if [ -n "$(git rev-list -1 HEAD 2>/dev/null)" ]; then
   if [ "$base" = "$empty_tree" ]; then range="HEAD"; else range="$base..HEAD"; fi
-  scan git --log-opts="--text $range" . || fail "possible secret in a commit since the base (shown redacted above)"
+  # --diff-merges=first-parent: a merge's own changes (e.g. made while resolving
+  # conflicts) are shown too; git log hides them by default.
+  scan git --log-opts="--text --diff-merges=first-parent $range" . || fail "possible secret in a commit since the base (shown redacted above)"
 fi
 echo "ok"

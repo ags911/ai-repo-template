@@ -17,6 +17,10 @@ fail() { echo "VERIFY FAILED: $*" >&2; exit 1; }
 # shellcheck source=/dev/null
 source .verify.env
 [ -n "${VERIFY_PROFILES// /}" ] || fail "VERIFY_PROFILES is empty in .verify.env (set ts, python, or both)"
+case " $VERIFY_PROFILES " in
+  *" ts "*|*" python "*) ;;
+  *) fail "VERIFY_PROFILES needs a stack profile (ts or python); secrets and links are extras" ;;
+esac
 
 for d in ${REQUIRED_DIRS:-}; do
   [ -d "$d" ] || fail "required directory '$d' is missing; boundary checks would pass vacuously"

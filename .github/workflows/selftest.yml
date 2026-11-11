@@ -58,10 +58,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - name: Turn on symlinks in git (the README's Windows step); keep CRLF conversion on
-        run: |
-          git config --global core.symlinks true
-          git config --global core.autocrlf true
+      - name: Turn on symlinks in git (the README's Windows step)
+        run: git config --global core.symlinks true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -80,14 +78,25 @@ jobs:
       - name: Scripts keep LF line endings under core.autocrlf=true
         shell: bash
         run: |
-          if grep -rlI $'\r' scripts .verify.env .verify-approvals modules/agent-hooks; then
-            echo "::error::CRLF line endings in the files above"; exit 1
-          fi
+          # A fresh clone with autocrlf on, so the conversion certainly applies (the
+          # checkout action's own settings don't matter here).
+          git -c core.autocrlf=true clone -q "file://$PWD" ../crlf
+          cd ../crlf
+          # Count carriage returns as raw bytes (Git Bash's grep can hide them).
+          crs() { LC_ALL=C tr -cd '\r' < "$1" | wc -c | tr -d ' '; }
+          echo "CR bytes: README.md=$(crs README.md) scripts/verify.sh=$(crs scripts/verify.sh)"
+          # Control: a file without an eol rule must have been converted, or this step
+          # isn't testing anything.
+          [ "$(crs README.md)" -gt 0 ] || { echo "::error::README.md has no CRLF: autocrlf didn't apply"; exit 1; }
+          bad=""
+          while IFS= read -r f; do [ "$(crs "$f")" -eq 0 ] || bad="$bad $f"; done \
+            < <(git ls-files scripts .verify.env .verify-approvals modules/agent-hooks/scripts modules/agent-hooks/.githooks)
+          [ -z "$bad" ] || { echo "::error::CRLF line endings in:$bad"; exit 1; }
           # verify.sh refuses the template's empty profile list; reaching that message
           # proves bash parsed the script (a stray \r fails much earlier).
           out=$(bash scripts/verify.sh 2>&1 || true)
           echo "$out" | grep -q "VERIFY_PROFILES is empty" || { echo "::error::verify.sh did not run: $out"; exit 1; }
-          echo "LF endings kept; verify.sh runs under Git Bash"
+          echo "README.md converted to CRLF; scripts kept LF; verify.sh runs under Git Bash"
       - name: Without symlinks the links are plain text files
         shell: bash
         run: |

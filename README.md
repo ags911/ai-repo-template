@@ -162,6 +162,17 @@ template with monolith and distributed profiles, real boundary checks
 analysis, boundary-check generation, and quantum evaluation, and agent hooks that stop
 Claude Code and Codex finishing while verify fails.
 
+## Releases and upgrades
+A project made from this template is a copy: it doesn't receive later fixes. Each release on
+the [releases page](https://github.com/ags911/ai-repo-template/releases) starts with
+**Upgrade notes**: what a project made from an earlier version should copy across, and which
+files. The top of `.verify.env` says which release your project came from.
+
+To cut a release (maintainers): bump the version at the top of `.verify.env` in a PR, merge
+it, then run `gh release create vX.Y.Z --generate-notes` and put the upgrade notes at the top.
+A minor version adds or changes checks; a patch fixes them; a major version changes what a
+project must do to keep verify passing.
+
 ## Known limits
 - `check-suppressions.sh` reads text; it doesn't parse code. It catches the common ways of
   weakening checks, and two rounds of review closed the bypasses found, but text that only

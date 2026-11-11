@@ -1287,7 +1287,49 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   application_reaches_infrastructure_via_barrel domain_imports_node_process
   adr_clean_pass adr_bad_status adr_missing_successor adr_duplicate_number adr_not_in_index
   complexity_ts_clean_pass complexity_ts_too_many_params complexity_ts_too_complex complexity_ts_too_deep
-  complexity_ts_function_too_long complexity_py_clean_pass complexity_py_too_complex complexity_py_too_many_args"
+  complexity_ts_function_too_long complexity_py_clean_pass complexity_py_too_complex complexity_py_too_many_args template_update_check"
+
+case_template_update_check() {
+  # The weekly update check's version comparison: numeric, field by field, and strict about input.
+  local check="$ROOT/scripts/template-update-check.sh" d="$WORK/update_check" out rc
+  mkdir -p "$d"; cd "$d"
+  printf 'Created from ai-repo-template v1.0.0.\n' > .verify.env
+  # expect_update TAG WANT: exit 0 and update=WANT for the current version in .verify.env.
+  expect_update() {
+    rc=0; out=$("$check" "$1" 2>&1) || rc=$?
+    printf '%s\n' "$out" > "$WORK/out.log"
+    if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | sed -n 's/^update=//p')" = "$2" ]; then
+      report "update_check_$1" 1 ""
+    else
+      report "update_check_$1" 0 "tag $1: expected update=$2, got exit $rc"
+    fi
+  }
+  # expect_fails NAME NEEDLE [ARGS...]: exit 1 and NEEDLE in the message.
+  expect_fails() {
+    local name="$1" needle="$2"; shift 2
+    rc=0; out=$("$check" "$@" 2>&1) || rc=$?
+    printf '%s\n' "$out" > "$WORK/out.log"
+    if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -qF -- "$needle"; then
+      report "update_check_$name" 1 ""
+    else
+      report "update_check_$name" 0 "expected exit 1 with '$needle', got exit $rc"
+    fi
+  }
+  expect_update v1.0.0 false
+  expect_update v0.9.9 false
+  expect_update v1.0.1 true
+  expect_update v1.1.0 true
+  expect_update v2.0.0 true
+  printf 'Created from ai-repo-template v1.9.0.\n' > .verify.env
+  expect_update v1.10.0 true
+  expect_update v1.9.0 false
+  printf 'Created from ai-repo-template v1.0.0.\n' > .verify.env
+  expect_fails malformed_tag "is not vX.Y.Z" v1.1
+  expect_fails no_argument "is not vX.Y.Z"
+  printf 'nothing here\n' > .verify.env
+  expect_fails no_version_line "no 'Created from" v1.0.1
+  record template_update_check
+}
 
 ran=0
 for name in $ALL_CASES; do

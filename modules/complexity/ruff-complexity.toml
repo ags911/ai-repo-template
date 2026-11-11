@@ -1,0 +1,15 @@
+# Size and complexity limits for Python (complexity module). Paste these tables into your
+# pyproject.toml (merge with any [tool.ruff.lint] you already have) and set the numbers.
+# extend-select adds to your own rule selection, so it works alongside an existing select.
+# ruff has no per-file length rule; max-statements bounds function size instead.
+
+[tool.ruff.lint]
+extend-select = ["C901", "PLR0912", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10  # independent paths through one function
+
+[tool.ruff.lint.pylint]
+max-args = 4          # parameters per function
+max-branches = 12     # branches per function
+max-statements = 50   # statements per function

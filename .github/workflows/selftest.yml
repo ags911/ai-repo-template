@@ -40,7 +40,7 @@ jobs:
           scripts/ci-install-tool.sh gitleaks
           scripts/ci-install-tool.sh lychee
       - name: shellcheck
-        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh selftest/agent-eval.sh modules/agent-hooks/scripts/*.sh modules/agent-hooks/.githooks/pre-push
+        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh selftest/agent-eval.sh modules/agent-hooks/scripts/*.sh modules/agent-hooks/.githooks/pre-push modules/adr/scripts/profiles/*.sh
       # actionlint checks workflow syntax and expressions (verify.yml never runs here);
       # zizmor checks workflow security. Pinned; bump both by hand.
       - name: Lint workflows

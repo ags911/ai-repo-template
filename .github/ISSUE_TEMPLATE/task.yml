@@ -25,3 +25,12 @@ body:
     attributes:
       label: Out of scope
       description: What not to change.
+  - type: dropdown
+    id: model
+    attributes:
+      label: Suggested model and effort
+      description: How much reasoning the task needs. Tiers, not model names, so this doesn't go stale.
+      options:
+        - "Most capable model, high effort: design or architecture calls, data migrations"
+        - "Default model and effort: normal feature and bug work"
+        - "Fast model or low effort: mechanical, checkable work (renames, lint, docs)"

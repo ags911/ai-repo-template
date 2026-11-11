@@ -7,6 +7,8 @@ description: Draft an Architecture Decision Record in docs/adr/ with status Prop
 
 Produces one new ADR file with status **Proposed** and one new row in the decision index.
 
+Suggested model and effort: default model and effort. It writes up a decision already analysed.
+
 ## Preconditions
 - `docs/adr/README.md` (the index) and `docs/adr/0000-template.md` exist. If either is
   missing, stop and say the `adr` module is not installed. Do not create them yourself.

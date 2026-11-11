@@ -12,7 +12,7 @@ do whatever its section below says.
 | `agent-memory` | Agents repeatedly hit the same environment traps across sessions |
 | `architecture` | The codebase has distinct modules whose dependencies you want to fix |
 | `boundaries-ts` / `boundaries-python` | You have an ARCHITECTURE.md and want its rules enforced in CI |
-| `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, and quanta |
+| `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, quanta, schema migrations and refactoring |
 | `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
 
@@ -90,7 +90,7 @@ is the backstop for those.
 `selftest/py-sample` is a working example of this module.
 
 ## skills
-Four skills in the open `SKILL.md` format, shared by Claude Code and Codex:
+Six skills in the open `SKILL.md` format, shared by Claude Code and Codex:
 - `.agents/skills/` holds the skills. Codex reads this folder.
 - `.claude/skills/` holds a relative symlink to each one. Claude Code 2.1.306 reads only this
   folder; in a test, a skill that existed only in `.agents/skills/` didn't load.
@@ -111,6 +111,8 @@ run one by name, for example `/adr-builder`.
 | `adr-builder` | A numbered ADR with status Proposed, plus its index row | `adr` (required) |
 | `fitness-function-generator` | dependency-cruiser rules or import-linter contracts, `REQUIRED_DIRS`, and proof that each rule fails | `architecture` + `boundaries-ts` / `boundaries-python` (required) |
 | `quantum-evaluator` | Deployables, data stores, calls, the number of quanta, a recommended profile, mismatches | `architecture` |
+| `schema-migration-review` | Release-by-release expand, migrate, contract steps for a schema, event or API change, each with a rollback and a check before the next | `adr` |
+| `named-refactoring` | A clean-up done as named refactorings, one small step at a time, with the test result after each | (none) |
 
 `/.agents/` and `/.claude/` are in CODEOWNERS, so changes to skills need code-owner review.
 
@@ -119,7 +121,8 @@ per prompt (edits and shell disabled) and records which skill loaded: three prom
 that should load it, and three unrelated prompts that should load none. It needs a signed-in
 `claude` CLI and makes real model calls, so it is not part of CI. Rerun it after changing a
 skill's `description`.
-Last run (2026-11-10, Claude Code 2.1.306, default model): 15 of 15. One run per prompt is
+Last run (2026-11-11, Claude Code 2.1.306, default model): 19 of 19, including a single rename
+that must load no skill. One run per prompt is
 a small sample, and trigger rates can vary by model.
 
 ## agent-hooks

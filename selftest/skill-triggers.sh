@@ -39,11 +39,15 @@ fitness-function-generator|Set up dependency-cruiser rules that match our archit
 quantum-evaluator|Our orders service and billing service share one Postgres database. Are they really independent?
 quantum-evaluator|Should ARCHITECTURE.md use Profile A or Profile B for this system?
 quantum-evaluator|How many independently deployable parts does this system actually have?
+schema-migration-review|I want to rename the qty column on orders to quantity. Is that safe to do?
+schema-migration-review|Plan how we change the order event payload so amount becomes amount_cents.
+named-refactoring|placeOrder and createOrder are getting messy. Clean them up without changing behaviour.
+named-refactoring|Untangle src/application/place-order.ts; it does too much in one function.
 none|What does createOrder return when the quantity is 2?
 none|Rename the variable repo to repository in src/application/place-order.ts.
 none|Which npm scripts does this project define?'
 
-OURS="adr-builder tradeoff-analyzer fitness-function-generator quantum-evaluator"
+OURS="adr-builder tradeoff-analyzer fitness-function-generator quantum-evaluator schema-migration-review named-refactoring"
 pass=0; fail=0
 printf '%-28s %-34s %s\n' "EXPECTED" "LOADED" "PROMPT"
 while IFS='|' read -r want prompt; do

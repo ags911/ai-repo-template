@@ -9,6 +9,8 @@ Produces boundary-check config that `./scripts/verify.sh` runs, plus a proof tab
 every rule was seen to fail on a deliberate violation and pass once it was removed. A rule
 that was never seen to fail does not count and must not be reported as enforced.
 
+Suggested model and effort: default model and effort. Each rule is proven by making it fail.
+
 ## Preconditions
 - `ARCHITECTURE.md` exists and states dependency rules (the "Layer rules" section and/or
   the Modules table's "May depend on" column). If it has none, stop and ask the user for

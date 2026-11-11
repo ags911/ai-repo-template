@@ -49,7 +49,7 @@ jobs:
             echo
             echo "Release notes: https://github.com/$TEMPLATE_REPO/releases/tag/$latest"
             echo
-            gh api "repos/$TEMPLATE_REPO/releases/latest" --jq .body \
+            gh api "repos/$TEMPLATE_REPO/releases/tags/$latest" --jq .body \
               | awk '/^## Upgrade notes/{on=1} on && /^## / && !/Upgrade notes/{exit} on'
             echo
             echo "After copying what you need, update the version line at the top of .verify.env."

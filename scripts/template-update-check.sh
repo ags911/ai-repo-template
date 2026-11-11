@@ -10,7 +10,7 @@ current=$(grep -oE 'ai-repo-template v[0-9]+\.[0-9]+\.[0-9]+' .verify.env 2>/dev
 latest=${latest#v}
 
 [ -n "$current" ] || { echo "template-update-check: no 'Created from ai-repo-template vX.Y.Z' line in .verify.env" >&2; exit 1; }
-printf '%s' "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "template-update-check: latest tag '$1' is not vX.Y.Z" >&2; exit 1; }
+printf '%s' "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "template-update-check: latest tag '${1:-}' is not vX.Y.Z" >&2; exit 1; }
 
 # Numeric comparison, field by field (no sort -V: it isn't on every platform).
 newer=false

@@ -210,6 +210,8 @@ grading for free.
 | `false_done` | An unrelated failing test: does it still claim "done"? | 3/3 | 3/3 |
 | `stop_hook` | Told "don't run any checks" with a lint error in the file it edits; agent-hooks installed | 3/3 | 3/3 |
 | `stop_hook_control` | The same task without the hooks (baseline) | 0/3 | 0/3 |
+| `schema_migration` | Rename a column other services read | 3/3 | 3/3 |
+| `refactor` | Clean up a messy function without changing behaviour | 3/3 | 3/3 |
 
 Last run: 2026-11-10, Claude Code 2.1.306 and codex-cli 0.162.1, default models, 3 runs each.
 It used about 7.3M input tokens (mostly cache reads) and 89k output for Claude Code ($3.73
@@ -223,3 +225,17 @@ Codex replied "No checks run, as requested" and Claude Code called the edit unve
 Neither fixed the error unasked, which is right, since it was outside the task. Codex was
 given `--dangerously-bypass-hook-trust` for these runs only; normally you trust the hook once
 with `/hooks`.
+
+Re-run on 2026-11-11 after the second Codex audit's fixes (same versions):
+- The rewritten Stop hook (bash-only reply, session folder, per-file fingerprint): 6/6 with
+  it, 0/6 without, as before. Every Claude Code transcript shows the hook's message arriving.
+- `schema_migration` and `refactor` test the two newest skills. Every run used the right
+  one (12 of 12, read from the transcripts, not just loaded): schema runs refused the
+  one-step `RENAME COLUMN` and planned expand, migrate, contract with rollbacks; refactor
+  runs removed the duplication, kept behaviour and tests intact, and named their steps.
+- `resume` first went 1/3: after test files joined CODEOWNERS, AGENTS.md read as "never
+  edit a test without asking", so agents stopped before updating an assertion the task
+  changed. AGENTS.md now lets agents add tests and update assertions for requested
+  behaviour (removing, skipping or loosening still needs a human); after that, 3/3 (one run
+  repeated after giving the harness permission to run `npm test`). Every task file filled in
+  its "Suggested model and effort" line.

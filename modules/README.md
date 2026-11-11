@@ -13,6 +13,7 @@ do whatever its section below says.
 | `architecture` | The codebase has distinct modules whose dependencies you want to fix |
 | `boundaries-ts` / `boundaries-python` | You have an ARCHITECTURE.md and want its rules enforced in CI |
 | `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, quanta, schema migrations and refactoring |
+| `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
 
 ## glossary
@@ -21,6 +22,10 @@ Fill in real terms. Delete the example row.
 ## adr
 Keep `docs/adr/README.md` as a one-line-per-decision index so agents read the index, not every ADR.
 
+Turn on the `adr` verify profile (`VERIFY_PROFILES="ts adr"`; the module installs
+`scripts/profiles/adr.sh`) to check, on every run, that each ADR is named `NNNN-title.md` with a
+unique number, has a status of Proposed, Accepted or `Superseded by ADR-NNNN` (and that
+successor exists), and is listed in the index. The `links` profile checks the index's links.
 ## agent-memory
 `.agent/tasks/` is already gitignored by the core. `.agent/learnings.md` is already in CODEOWNERS.
 
@@ -143,3 +148,17 @@ Verify runs at the end of a turn only when the repo changed since its last pass,
 verify's run time there and nowhere else.
 The selftest checks each behaviour above; `selftest/agent-eval.sh stop_hook` checks it with
 real agents.
+
+## complexity
+Size and complexity limits as fitness functions: verify fails when code grows past them. Set
+the numbers for your project; the defaults are a starting point, not a standard.
+
+- **TypeScript:** copy `eslint.complexity.js` next to your ESLint config and add `...complexity`
+  to its array. It limits complexity (10), nesting depth (4), parameters (4), function length
+  (60 lines) and file length (400 lines), in `src/`, not in tests.
+- **Python:** paste `ruff-complexity.toml`'s tables into `pyproject.toml`. It turns on ruff's
+  C901 (complexity 10), PLR0913 (4 arguments), PLR0912 (12 branches) and PLR0915 (50
+  statements). It uses `extend-select`, so it adds to a rule selection you already have.
+  Ruff has no file-length rule; statement count bounds function size instead.
+
+The selftest proves each limit fails on a deliberate violation.

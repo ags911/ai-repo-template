@@ -1143,6 +1143,111 @@ case_domain_imports_node_process() {
   expect domain_imports_node_process fail "core-no-io-builtins: src/domain/leak.ts"; record domain_imports_node_process
 }
 
+# --- adr profile (issue 1) -------------------------------------------------------------
+
+with_adr() { cp -R "$ROOT/modules/adr/." .; set_env VERIFY_PROFILES "ts adr"; git add -A; commit "install adr module"; }
+adr_file() {  # adr_file NUMBER SLUG STATUS: write docs/adr/NUMBER-SLUG.md and index it
+  printf '# ADR %s: %s\n\n- **Status:** %s\n- **Date:** 2026-11-11\n' "$1" "$2" "$3" > "docs/adr/$1-$2.md"
+  printf '| [%s](%s-%s.md) | %s | %s |\n' "$1" "$1" "$2" "$2" "${3%% *}" >> docs/adr/README.md
+}
+
+case_adr_clean_pass() {
+  new_repo adr_clean_pass; with_adr
+  adr_file 0002 use-postgres "Superseded by ADR-0003"; adr_file 0003 use-sqlite Accepted
+  expect adr_clean_pass pass "=== VERIFY PASSED (ts adr) ==="; record adr_clean_pass
+}
+
+case_adr_bad_status() {
+  new_repo adr_bad_status; with_adr
+  adr_file 0002 use-postgres Approved
+  expect adr_bad_status fail "isn't Proposed, Accepted, or Superseded"; record adr_bad_status
+}
+
+case_adr_missing_successor() {
+  new_repo adr_missing_successor; with_adr
+  adr_file 0002 use-postgres "Superseded by ADR-0009"
+  expect adr_missing_successor fail "ADR-0009, which doesn't exist"; record adr_missing_successor
+}
+
+case_adr_duplicate_number() {
+  new_repo adr_duplicate_number; with_adr
+  adr_file 0001 use-postgres Proposed
+  expect adr_duplicate_number fail "number 0001 is used twice"; record adr_duplicate_number
+}
+
+case_adr_not_in_index() {
+  new_repo adr_not_in_index; with_adr
+  printf '# ADR 0002: Use Postgres\n\n- **Status:** Proposed\n' > docs/adr/0002-use-postgres.md
+  expect adr_not_in_index fail "not listed in docs/adr/README.md"; record adr_not_in_index
+}
+
+# --- complexity module (issue 2) -------------------------------------------------------
+
+with_ts_complexity() {
+  cp "$ROOT/modules/complexity/eslint.complexity.js" .
+  { printf 'import complexity from "./eslint.complexity.js";\n'; cat eslint.config.js; } > eslint.config.tmp
+  mv eslint.config.tmp eslint.config.js
+  sed -i.bak 's/\.\.\.boundaries,/...boundaries, ...complexity,/' eslint.config.js; rm eslint.config.js.bak
+  git add -A; commit "install complexity limits"
+}
+with_py_complexity() {
+  # Paste the module's tables into pyproject.toml, as its instructions say.
+  cat "$ROOT/modules/complexity/ruff-complexity.toml" >> pyproject.toml
+  git add -A; commit "install complexity limits"
+}
+
+case_complexity_ts_clean_pass() {
+  new_repo complexity_ts_clean_pass; with_ts_complexity
+  expect complexity_ts_clean_pass pass "VERIFY PASSED"; record complexity_ts_clean_pass
+}
+
+case_complexity_ts_too_many_params() {
+  new_repo complexity_ts_too_many_params; with_ts_complexity
+  printf 'export const f = (a: number, b: number, c: number, d: number, e: number): number => a + b + c + d + e;\n' > src/domain/params.ts
+  expect complexity_ts_too_many_params fail "max-params"; record complexity_ts_too_many_params
+}
+
+case_complexity_ts_too_complex() {
+  new_repo complexity_ts_too_complex; with_ts_complexity
+  { printf 'export function grade(n: number): string {\n'
+    for i in 1 2 3 4 5 6 7 8 9 10 11; do printf '  if (n === %s) return "g%s";\n' "$i" "$i"; done
+    printf '  return "none";\n}\n'; } > src/domain/grade.ts
+  expect complexity_ts_too_complex fail "has a complexity of"; record complexity_ts_too_complex
+}
+
+case_complexity_ts_too_deep() {
+  new_repo complexity_ts_too_deep; with_ts_complexity
+  printf 'export function deep(n: number): number {\n  if (n > 0) {\n    if (n > 1) {\n      if (n > 2) {\n        if (n > 3) {\n          if (n > 4) {\n            return 5;\n          }\n        }\n      }\n    }\n  }\n  return 0;\n}\n' > src/domain/deep.ts
+  expect complexity_ts_too_deep fail "max-depth"; record complexity_ts_too_deep
+}
+
+case_complexity_ts_function_too_long() {
+  new_repo complexity_ts_function_too_long; with_ts_complexity
+  { printf 'export function long(): number {\n  let n = 0;\n'
+    i=0; while [ $i -lt 62 ]; do printf '  n += %s;\n' "$i"; i=$((i + 1)); done
+    printf '  return n;\n}\n'; } > src/domain/long.ts
+  expect complexity_ts_function_too_long fail "max-lines-per-function"; record complexity_ts_function_too_long
+}
+
+case_complexity_py_clean_pass() {
+  new_py_repo complexity_py_clean_pass; with_py_complexity
+  expect complexity_py_clean_pass pass "VERIFY PASSED"; record complexity_py_clean_pass
+}
+
+case_complexity_py_too_complex() {
+  new_py_repo complexity_py_too_complex; with_py_complexity
+  { printf 'def grade(n: int) -> str:\n'
+    for i in 1 2 3 4 5 6 7 8 9 10 11; do printf '    if n == %s:\n        return "g%s"\n' "$i" "$i"; done
+    printf '    return "none"\n'; } > app/domain/grade.py
+  expect complexity_py_too_complex fail "C901"; record complexity_py_too_complex
+}
+
+case_complexity_py_too_many_args() {
+  new_py_repo complexity_py_too_many_args; with_py_complexity
+  printf 'def f(a: int, b: int, c: int, d: int, e: int) -> int:\n    return a + b + c + d + e\n' > app/domain/args.py
+  expect complexity_py_too_many_args fail "PLR0913"; record complexity_py_too_many_args
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -1179,7 +1284,10 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   extras_only_profiles_fail quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
   secrets_in_merge_resolution stop_hook_without_python stop_hook_uses_session_cwd
   stop_hook_untracked_boundaries stop_hook_no_base_committed_failure py_open_hidden_by_subscript
-  application_reaches_infrastructure_via_barrel domain_imports_node_process"
+  application_reaches_infrastructure_via_barrel domain_imports_node_process
+  adr_clean_pass adr_bad_status adr_missing_successor adr_duplicate_number adr_not_in_index
+  complexity_ts_clean_pass complexity_ts_too_many_params complexity_ts_too_complex complexity_ts_too_deep
+  complexity_ts_function_too_long complexity_py_clean_pass complexity_py_too_complex complexity_py_too_many_args"
 
 ran=0
 for name in $ALL_CASES; do

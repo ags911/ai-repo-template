@@ -1,0 +1,25 @@
+# Template maintenance only: keeps a draft release up to date as PRs merge into main.
+# Projects made from the template delete this file and .github/release-drafter.yml.
+name: release-drafter
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-drafter
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Draft release notes
+    if: ${{ github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write        # create and update the draft release
+      pull-requests: read    # read merged PRs for the notes
+    steps:
+      - uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0

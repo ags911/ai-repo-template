@@ -1,0 +1,57 @@
+# For projects made from the template: once a week, check whether a newer template release
+# is out and, if so, open one issue with its upgrade notes. Changes no code.
+# Change TEMPLATE_REPO if you copied the template from a fork.
+name: template-update
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for a newer template release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write         # open one issue when a newer template release is out
+    env:
+      TEMPLATE_REPO: ags911/ai-repo-template
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare with the latest template release
+        run: |
+          # The template itself has selftest/; it doesn't check against itself.
+          if [ -f selftest/run.sh ]; then echo "This is the template; nothing to check."; exit 0; fi
+          latest=$(gh api "repos/$TEMPLATE_REPO/releases/latest" --jq .tag_name)
+          result=$(scripts/template-update-check.sh "$latest")
+          echo "$result"
+          echo "$result" | grep -qx 'update=true' || exit 0
+
+          title="ai-repo-template $latest is available"
+          open=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq length)
+          if [ "$open" -gt 0 ]; then echo "An issue for $latest is already open."; exit 0; fi
+
+          current=$(echo "$result" | sed -n 's/^current=//p')
+          {
+            echo "This project was made from ai-repo-template $current. $latest is out."
+            echo
+            echo "Release notes: https://github.com/$TEMPLATE_REPO/releases/tag/$latest"
+            echo
+            gh api "repos/$TEMPLATE_REPO/releases/latest" --jq .body \
+              | awk '/^## Upgrade notes/{on=1} on && /^## / && !/Upgrade notes/{exit} on'
+            echo
+            echo "After copying what you need, update the version line at the top of .verify.env."
+          } > body.md
+          gh issue create --title "$title" --body-file body.md

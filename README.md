@@ -163,8 +163,13 @@ analysis, boundary-check generation, and quantum evaluation, and agent hooks tha
 Claude Code and Codex finishing while verify fails.
 
 ## Known limits
-- `check-suppressions.sh` is pattern-based. It catches the common ways of weakening checks,
-  not all of them. Code-owner review of test and config changes is the real backstop.
+- `check-suppressions.sh` reads text; it doesn't parse code. It catches the common ways of
+  weakening checks, and two rounds of review closed the bypasses found, but text that only
+  looks like a comment (for example `"https://reason: x"` inside a string) can still fool it.
+  It also can't see an assertion removed from a test that still exists. That's why test
+  files and check config are in CODEOWNERS: code-owner review is the real backstop.
+- Locally, a base ref that doesn't exist (no `origin/main` yet) skips the suppression check
+  with a warning, so a fresh local repo can still run verify. In CI the same case fails.
 - Boundary tools check imports, not runtime calls (for example HTTP calls between modules).
 - On the first push to `main` there is no earlier commit, so the suppression check diffs
   against the empty tree: every skip or suppression in the initial content needs a reason.

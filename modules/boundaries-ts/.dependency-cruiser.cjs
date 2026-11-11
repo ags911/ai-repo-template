@@ -40,6 +40,13 @@ module.exports = {
       to: { path: "^src/infrastructure", reachable: true },
     },
     {
+      // The same for application code: no reaching infrastructure through a barrel either.
+      name: "application-not-reach-infrastructure",
+      severity: "error",
+      from: { path: "^src/application" },
+      to: { path: "^src/infrastructure", reachable: true },
+    },
+    {
       name: "core-no-infra-packages",
       comment: "domain and application must not import infrastructure packages (see INFRA_PACKAGES)",
       severity: "error",
@@ -48,13 +55,13 @@ module.exports = {
     },
     {
       name: "core-no-io-builtins",
-      comment: "domain and application must not do I/O directly (network, files, processes)",
+      comment: "domain and application must not do I/O directly (network, files, processes, env, databases)",
       severity: "error",
       from: { path: "^src/(domain|application)" },
       to: {
         dependencyTypes: ["core"],
         // Subpaths are listed explicitly; dependency-cruiser rejects nested repetition as unsafe.
-        path: "^(node:)?(fs|fs/promises|http|https|http2|net|tls|dgram|dns|dns/promises|child_process|cluster|worker_threads)$",
+        path: "^(node:)?(fs|fs/promises|http|https|http2|net|tls|dgram|dns|dns/promises|child_process|cluster|worker_threads|process|sqlite)$",
       },
     },
     {

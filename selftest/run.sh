@@ -776,8 +776,8 @@ case_secrets_ignores_gitignored() {
 }
 
 case_secrets_missing_tool() {
-  # Profile on its own: gitleaks may share a PATH folder with node.
-  new_repo secrets_missing_tool; set_env VERIFY_PROFILES "secrets"
+  # secrets runs first: gitleaks may share a PATH folder with node, which ts needs.
+  new_repo secrets_missing_tool; set_env VERIFY_PROFILES "secrets ts"
   expect secrets_missing_tool fail "gitleaks is not installed" PATH="$(path_without gitleaks)"
   record secrets_missing_tool
 }
@@ -803,7 +803,7 @@ case_links_missing_anchor() {
 }
 
 case_links_missing_tool() {
-  new_repo links_missing_tool; set_env VERIFY_PROFILES "links"
+  new_repo links_missing_tool; set_env VERIFY_PROFILES "links ts"
   expect links_missing_tool fail "lychee is not installed" PATH="$(path_without lychee)"
   record links_missing_tool
 }
@@ -1024,6 +1024,125 @@ case_domain_imports_io_builtin_subpath() {
   expect domain_imports_io_builtin_subpath fail "core-no-io-builtins: src/domain/leak.ts"; record domain_imports_io_builtin_subpath
 }
 
+# --- audit round 2 ---------------------------------------------------------------------
+
+case_extras_only_profiles_fail() {
+  new_repo extras_only_profiles_fail; set_env VERIFY_PROFILES "links"
+  expect extras_only_profiles_fail fail "needs a stack profile"; record extras_only_profiles_fail
+}
+
+case_quoted_skip_option() {
+  new_repo quoted_skip_option
+  printf 'import { test } from "node:test";\ntest("pending", { "sk''ip": true }, () => {});\n' > src/domain/pending.test.ts
+  expect quoted_skip_option fail "without 'reason:'"; record quoted_skip_option
+}
+
+case_test_renamed_out_of_pytest_collection() {
+  # tests/test_orders.py -> tests/orders.py: still under tests/, but pytest stops collecting it.
+  new_py_repo test_renamed_out_of_pytest_collection
+  git mv tests/test_orders.py tests/orders.py; commit "hide python test"
+  expect test_renamed_out_of_pytest_collection fail "test files deleted"; record test_renamed_out_of_pytest_collection
+}
+
+case_non_ascii_test_deleted() {
+  new_repo non_ascii_test_deleted
+  git checkout -q main
+  printf 'import { test } from "node:test";\ntest("ok", () => {});\n' > "src/domain/caf\303\251.test.ts"
+  git add -A; commit "base" --amend; git checkout -q -B work main
+  git rm -q "src/domain/caf\303\251.test.ts"; commit "delete accented test"
+  expect non_ascii_test_deleted fail "test files deleted"; record non_ascii_test_deleted
+}
+
+case_secrets_in_merge_resolution() {
+  # A token introduced by a merge commit itself, then removed: only a merge diff shows it.
+  new_repo secrets_in_merge_resolution; set_env VERIFY_PROFILES "ts secrets"
+  git add -A; commit "enable secrets"
+  git checkout -q -b side; printf 'side\n' > side.txt; git add -A; commit "side"
+  git checkout -q work
+  git -c user.name=selftest -c user.email=selftest@example.invalid merge -q --no-ff --no-commit side
+  printf 'export const token = "%s";\n' "$(fake_token)" > src/infrastructure/config.ts
+  git add -A; commit "merge side"
+  git rm -q src/infrastructure/config.ts; commit "remove token"
+  expect secrets_in_merge_resolution fail "SECRETS PROFILE FAILED"; record secrets_in_merge_resolution
+}
+
+case_stop_hook_without_python() {
+  # The hook must still block when python3 isn't available.
+  new_repo stop_hook_without_python; with_hooks
+  mkdir -p "$WORK/nopython"; printf '#!/bin/sh\nexit 127\n' > "$WORK/nopython/python3"; chmod +x "$WORK/nopython/python3"
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts
+  set +e
+  printf '{"stop_hook_active": false}' | env PATH="$WORK/nopython:$PATH" CI=false BASE_REF=main ./scripts/agent-stop-check.sh > "$WORK/out.log" 2>&1
+  set -e
+  if /usr/bin/python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if d["decision"]=="block" else 1)' "$WORK/out.log" 2>/dev/null; then
+    report stop_hook_without_python 1 ""
+  else report stop_hook_without_python 0 "no valid block decision without python3"; fi
+  record stop_hook_without_python
+}
+
+case_stop_hook_uses_session_cwd() {
+  # CLAUDE_PROJECT_DIR points at a clean checkout; the session (cwd) is a broken one.
+  new_repo stop_hook_uses_session_cwd; with_hooks
+  local broken; broken=$(pwd)
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts
+  new_repo stop_hook_clean_checkout; with_hooks
+  local clean; clean=$(pwd)
+  cd "$broken"
+  set +e
+  printf '{"cwd": "%s", "stop_hook_active": false}' "$broken" \
+    | env CLAUDE_PROJECT_DIR="$clean" CI=false BASE_REF=main "$clean/scripts/agent-stop-check.sh" > "$WORK/out.log" 2>&1
+  set -e
+  if grep -q '"decision": "block"' "$WORK/out.log"; then report stop_hook_uses_session_cwd 1 ""
+  else report stop_hook_uses_session_cwd 0 "hook checked CLAUDE_PROJECT_DIR instead of the session cwd"; fi
+  record stop_hook_uses_session_cwd
+}
+
+case_stop_hook_untracked_boundaries() {
+  # Moving all of b.ts into a.ts keeps the concatenated bytes the same; the fingerprint must change.
+  new_repo stop_hook_untracked_boundaries; with_hooks
+  printf 'import { x } from "./b.ts";\nexport const y = x;\n' > src/domain/a.ts
+  printf 'export const x = 1;\n' > src/domain/b.ts
+  stop_hook x '{"stop_hook_active": false}'
+  cat src/domain/b.ts >> src/domain/a.ts; : > src/domain/b.ts
+  stop_hook x '{"stop_hook_active": false}'
+  if grep -q '"decision": "block"' "$WORK/out.log"; then report stop_hook_untracked_boundaries 1 ""
+  else report stop_hook_untracked_boundaries 0 "moved content between untracked files reused a cached pass"; fi
+  record stop_hook_untracked_boundaries
+}
+
+case_stop_hook_no_base_committed_failure() {
+  # No base branch to compare with: a committed failure must still be verified.
+  new_repo stop_hook_no_base_committed_failure; with_hooks
+  printf 'export const bad: any = 1;\n' > src/domain/bad.ts; git add -A; commit "bad"
+  set +e
+  printf '{"stop_hook_active": false}' | env CI=false BASE_REF=origin/missing ./scripts/agent-stop-check.sh > "$WORK/out.log" 2>&1
+  set -e
+  if grep -q '"decision": "block"' "$WORK/out.log"; then report stop_hook_no_base_committed_failure 1 ""
+  else report stop_hook_no_base_committed_failure 0 "missing base let a committed failure through"; fi
+  record stop_hook_no_base_committed_failure
+}
+
+case_py_open_hidden_by_subscript() {
+  new_py_repo py_open_hidden_by_subscript
+  printf 'handles: dict[object, int] = {}\nhandles[open] = 1\n\n\ndef load() -> str:\n    with open("orders.txt") as f:\n        return f.read()\n' > app/domain/mixed.py
+  expect py_open_hidden_by_subscript fail "calls open()"; record py_open_hidden_by_subscript
+}
+
+case_application_reaches_infrastructure_via_barrel() {
+  new_repo application_reaches_infrastructure_via_barrel
+  mkdir -p src/shared
+  printf 'export { InMemoryOrderRepository } from "../infrastructure/in-memory-order-repository.ts";\n' > src/shared/index.ts
+  printf 'import { InMemoryOrderRepository } from "../shared/index.ts";\nexport const repo = new InMemoryOrderRepository();\n' > src/application/leak.ts
+  expect application_reaches_infrastructure_via_barrel fail "application-not-reach-infrastructure: src/application/leak.ts"
+  record application_reaches_infrastructure_via_barrel
+}
+
+case_domain_imports_node_process() {
+  new_repo domain_imports_node_process
+  printf 'import { env } from "node:process";\nexport const region = env.REGION;\n' > src/domain/leak.ts
+  expect domain_imports_node_process fail "core-no-io-builtins: src/domain/leak.ts"; record domain_imports_node_process
+}
+
 ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   workflows_lint_catches_bad_expression workflows_lint_catches_injection empty_profiles unknown_profile missing_verify_env missing_package_script
   missing_tool_pnpm missing_tool_uv failing_lint_stops failing_test_stops
@@ -1056,7 +1175,11 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
   secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date
   stop_hook_blocks_committed_failure stop_hook_remembers_pass py_open_hidden_by_method
-  domain_imports_io_builtin_subpath"
+  domain_imports_io_builtin_subpath
+  extras_only_profiles_fail quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
+  secrets_in_merge_resolution stop_hook_without_python stop_hook_uses_session_cwd
+  stop_hook_untracked_boundaries stop_hook_no_base_committed_failure py_open_hidden_by_subscript
+  application_reaches_infrastructure_via_barrel domain_imports_node_process"
 
 ran=0
 for name in $ALL_CASES; do

@@ -80,7 +80,10 @@ jobs:
       - name: Scripts keep LF line endings under core.autocrlf=true
         shell: bash
         run: |
-          if grep -rlI $'\r' scripts .verify.env .verify-approvals modules/agent-hooks; then
+          # Control: a file without an eol rule must have been converted, or this job isn't
+          # testing anything.
+          grep -q $'\r' README.md || { echo "::error::README.md has no CRLF: autocrlf didn't apply"; exit 1; }
+          if grep -rlI $'\r' scripts .verify.env .verify-approvals modules/agent-hooks/scripts modules/agent-hooks/.githooks; then
             echo "::error::CRLF line endings in the files above"; exit 1
           fi
           # verify.sh refuses the template's empty profile list; reaching that message

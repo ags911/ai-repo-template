@@ -43,6 +43,17 @@ def _banned(module: str) -> str | None:
     return None
 
 
+def _target_names(target: ast.expr) -> set[str]:
+    """Names an assignment target binds: `x` and `a, b`, but not `d[open]` or `obj.open`."""
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return {n for t in target.elts for n in _target_names(t)}
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    return set()
+
+
 def _bound_names(tree: ast.Module) -> set[str]:
     """Names bound at the top level of the module. A method or nested function named
     `open` doesn't shadow the builtin elsewhere in the file, so it doesn't count."""
@@ -55,7 +66,7 @@ def _bound_names(tree: ast.Module) -> set[str]:
         elif isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             for target in targets:
-                names.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+                names.update(_target_names(target))
     return names
 
 

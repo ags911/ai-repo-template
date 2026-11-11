@@ -19,7 +19,7 @@ if ! git cat-file -e "${base}^{tree}" 2>/dev/null; then
   echo "WARNING: base ref '$base' not found locally; suppression check skipped"; exit 0
 fi
 
-pattern='@ts-ignore|@ts-nocheck|@ts-expect-error|eslint-disable|gitleaks:allow|\.only\(|\.skip\(|\.todo\(|\bxit\(|\bxdescribe\(|\b(skip|todo|only): *true\b|# *type: *ignore|# *noqa|# *pyright: *ignore|pytest\.mark\.(skip|xfail)|pytest\.skip\('
+pattern='@ts-ignore|@ts-nocheck|@ts-expect-error|eslint-disable|gitleaks:allow|\.only\(|\.skip\(|\.todo\(|\bxit\(|\bxdescribe\(|["'"'"']?(skip|todo|only)["'"'"']? *: *true\b|# *type: *ignore|# *noqa|# *pyright: *ignore|pytest\.mark\.(skip|xfail)|pytest\.skip\('
 reason='(#|//|/\*|--)[^"'"'"']*reason: *[^ ]{3,}|reason *= *["'"'"'][^"'"'"']{3,}'
 
 excludes=(':(exclude)scripts/check-suppressions.sh' ':(exclude)*.md')
@@ -44,13 +44,17 @@ approved() {
   sed 's/#.*//; s/[[:space:]]*$//' .verify-approvals | grep -qxF -- "$1"
 }
 
-# A test file by name or location. Anything under tests/ counts only with a code extension,
-# so renaming tests/test_x.py to tests/test_x.py.bak is caught.
-test_file='\.(test|spec)\.[cm]?[jt]sx?$|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)(tests?|__tests__)/.*\.(py|[cm]?[jt]sx?)$'
-name_status=$(git diff "${diff_opts[@]}" "$base" -M --name-status --diff-filter=DR)
-deleted=$(printf '%s\n' "$name_status" \
-  | while IFS=$'\t' read -r st old new; do
-      [ -n "${st:-}" ] || continue
+# A test file as the runners collect it. Python: test_*.py or *_test.py (pytest's default),
+# so moving tests/test_x.py to tests/x.py counts as hiding it. JS/TS: *.test.* / *.spec.*, or a
+# code file under tests/ or __tests__/ (so tests/x.test.ts -> tests/x.test.ts.bak is caught).
+test_file='\.(test|spec)\.[cm]?[jt]sx?$|(^|/)test_[^/]*\.py$|_test\.py$|(^|/)(tests?|__tests__)/.*\.[cm]?[jt]sx?$'
+# -z: no quoting, so a path like src/é.test.ts is matched as written.
+deleted=$(git diff "${diff_opts[@]}" "$base" -M --name-status --diff-filter=DR -z \
+  | while IFS= read -r -d '' st; do
+      IFS= read -r -d '' old || break
+      new=""
+      # (if, not case: bash 3.2 can't parse case inside $( ).)
+      if [ "${st:0:1}" = R ]; then IFS= read -r -d '' new || break; fi
       echo "$old" | grep -qE "$test_file" || continue
       approved "$old" && continue
       if [ "${st:0:1}" = D ]; then

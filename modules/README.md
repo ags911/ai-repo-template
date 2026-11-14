@@ -13,6 +13,7 @@ do whatever its section below says.
 | `architecture` | The codebase has distinct modules whose dependencies you want to fix |
 | `boundaries-ts` / `boundaries-python` | You have an ARCHITECTURE.md and want its rules enforced in CI |
 | `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, quanta, schema migrations and refactoring |
+| `ui` | The project has a screen people use, and agents build or change it: tests pass and axe is clean, yet buttons, spacing or states look wrong |
 | `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
 
@@ -162,3 +163,33 @@ the numbers for your project; the defaults are a starting point, not a standard.
   Ruff has no file-length rule; statement count bounds function size instead.
 
 The selftest proves each limit fails on a deliberate violation.
+
+## ui
+Behavioural tests and accessibility scans do not see layout: a button with no padding passes
+both. This module makes the agent look, and gives the reviewer something to look at.
+- `tests/e2e/screens.spec.ts`: captures every state at desktop and phone width and runs layout
+  guards on each (no sideways scroll, controls at least 24 px, text not touching its control's
+  edge). Fill in `STATES`; the guards fail the test, so they are enforced wherever your
+  Playwright tests run.
+- `docs/ui-checklist.md`: what to check in each image (spacing, targets, focus, states,
+  readability, responsive, CSS pitfalls).
+- `.agents/skills/ui-review/` with its `.claude/skills/` link: the procedure for a UI review.
+
+1. `npm i -D @playwright/test @axe-core/playwright` and install a browser. Add a `webServer`
+   and `baseURL` to your Playwright config, and a script `"screens": "playwright test screens"`.
+2. Copy the module in, fill in `STATES`, and run it once. Open the images.
+3. Add this to the project's `AGENTS.md` (unenforced: the guards are enforced, looking is not):
+
+   > **UI changes: look at them.** Before saying a UI change is done, run the screens spec,
+   > open the screenshots it writes, and fix what looks wrong. A passing test and a clean
+   > accessibility scan do not show that a screen looks right. Every new screen, dialog
+   > section or error state gets an entry in `tests/e2e/screens.spec.ts`. Do not loosen a
+   > guard to pass. A UI review is given the screenshots (`ui-review` skill).
+
+4. Give reviewers (human or model) the screenshots and `docs/ui-checklist.md`, not just the
+   diff. A reviewer that cannot read images gets the checklist and the guard output.
+
+Not included, on purpose: baseline-image comparison (`toHaveScreenshot`). It catches any
+visual change, but baselines differ between operating systems and fonts, so they must be
+generated on the machine that runs CI, and every intended change then needs a human to
+approve new baselines. Add it when the team will keep that up.

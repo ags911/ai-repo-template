@@ -387,7 +387,7 @@ case_skills_frontmatter() {
   # description is present and within Claude Code's 1,536-character listing limit.
   local f dir ok=1 why=""
   : > "$WORK/out.log"
-  for f in "$ROOT"/modules/skills/.agents/skills/*/SKILL.md; do
+  for f in "$ROOT"/modules/{skills,ui}/.agents/skills/*/SKILL.md; do
     dir=$(basename "$(dirname "$f")")
     awk -v want="$dir" '
       NR == 1 { if ($0 != "---") { print "first line is not ---"; bad = 1 }; next }
@@ -447,16 +447,19 @@ EOF
 case_skills_linked() {
   # Skills live in .agents/skills (Codex reads it); Claude Code reads only .claude/skills,
   # so each skill needs a relative symlink there, and each symlink needs a skill.
-  local d n link ok=1 why=""
+  # Checked for every module that ships skills.
+  local m d n link ok=1 why=""
   : > "$WORK/out.log"
-  for d in "$ROOT"/modules/skills/.agents/skills/*/; do
-    n=$(basename "$d"); link="$ROOT/modules/skills/.claude/skills/$n"
-    if [ ! -L "$link" ] || [ "$(readlink "$link")" != "../../.agents/skills/$n" ]; then
-      ok=0; why="$why $n(no link)"
-    fi
-  done
-  for link in "$ROOT"/modules/skills/.claude/skills/*; do
-    [ -f "$link/SKILL.md" ] || { ok=0; why="$why $(basename "$link")(dangling)"; }
+  for m in skills ui; do
+    for d in "$ROOT"/modules/$m/.agents/skills/*/; do
+      n=$(basename "$d"); link="$ROOT/modules/$m/.claude/skills/$n"
+      if [ ! -L "$link" ] || [ "$(readlink "$link")" != "../../.agents/skills/$n" ]; then
+        ok=0; why="$why $m/$n(no link)"
+      fi
+    done
+    for link in "$ROOT"/modules/$m/.claude/skills/*; do
+      [ -f "$link/SKILL.md" ] || { ok=0; why="$why $m/$(basename "$link")(dangling)"; }
+    done
   done
   report skills_linked "$ok" "skill links wrong:$why"; record skills_linked
 }

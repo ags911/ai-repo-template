@@ -451,13 +451,13 @@ case_skills_linked() {
   local m d n link ok=1 why=""
   : > "$WORK/out.log"
   for m in skills ui; do
-    for d in "$ROOT"/modules/$m/.agents/skills/*/; do
+    for d in "$ROOT/modules/$m/.agents/skills/"*/; do
       n=$(basename "$d"); link="$ROOT/modules/$m/.claude/skills/$n"
       if [ ! -L "$link" ] || [ "$(readlink "$link")" != "../../.agents/skills/$n" ]; then
         ok=0; why="$why $m/$n(no link)"
       fi
     done
-    for link in "$ROOT"/modules/$m/.claude/skills/*; do
+    for link in "$ROOT/modules/$m/.claude/skills/"*; do
       [ -f "$link/SKILL.md" ] || { ok=0; why="$why $m/$(basename "$link")(dangling)"; }
     done
   done

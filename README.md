@@ -37,6 +37,10 @@ runs on every PR, but nothing stops a merge while it is red or unreviewed.
 4. **TypeScript:** define `lint`, `typecheck`, and `test` in package.json scripts
    (e.g. `eslint .`, `tsc --noEmit`, `vitest run`).
    **Python:** add `ruff`, `mypy`, and `pytest` as dev dependencies (`uv add --dev ruff mypy pytest`).
+   On macOS, if tests load a native library through `DYLD_FALLBACK_LIBRARY_PATH` (for
+   example WeasyPrint with Homebrew's `/opt/homebrew/lib`), export it in `.verify.env`.
+   macOS strips `DYLD_*` variables when `verify.sh` starts, so a value set only in your shell
+   never reaches the tests.
 5. Replace `@your-handle` in CODEOWNERS, then in GitHub branch protection (or a ruleset) for
    `main` turn on "Require status checks" (select `verify`) and "Require review from Code
    Owners". Both need a public repo or a paid plan. In Settings > General, turn on

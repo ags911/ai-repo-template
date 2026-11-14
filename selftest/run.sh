@@ -472,6 +472,32 @@ case_py_clean_pass() {
   record py_clean_pass
 }
 
+case_py_tools_run_as_modules() {
+  # Tools must run as `python -m`, not through console-script launchers: under a path
+  # with spaces (as $WORK is) uv writes /bin/sh launchers, and macOS strips DYLD_*
+  # variables from /bin/sh. The argv check catches the regression on every OS; the
+  # environment check is the failure users see on macOS.
+  new_py_repo py_tools_run_as_modules
+  cat > tests/test_runner.py <<'PY'
+import os
+import sys
+
+
+def test_pytest_runs_as_a_module() -> None:
+    assert sys.argv[0].replace(os.sep, "/").endswith("pytest/__main__.py"), sys.argv[0]
+
+
+def test_dyld_variables_reach_the_tests() -> None:
+    assert os.environ.get("DYLD_FALLBACK_LIBRARY_PATH") == "/selftest/lib"
+PY
+  # Set in .verify.env, which the profile sources after it starts: on macOS a DYLD_*
+  # variable exported before verify.sh would be stripped by its #!/usr/bin/env shebang.
+  printf 'export DYLD_FALLBACK_LIBRARY_PATH=/selftest/lib\n' >> .verify.env
+  commit "runner checks"
+  expect py_tools_run_as_modules pass "=== VERIFY PASSED (python) ==="
+  record py_tools_run_as_modules
+}
+
 case_py_domain_imports_infrastructure() {
   new_py_repo py_domain_imports_infrastructure
   py_probe app/domain/leak.py app.infrastructure.in_memory_order_repository InMemoryOrderRepository
@@ -1258,7 +1284,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   deleted_test_committed deleted_test_uncommitted test_renamed_to_non_test
   test_moved_stays_test base_missing_in_ci base_missing_locally_warns ci_base_ref
   first_push_clean first_push_with_skip clean_pass
-  py_clean_pass py_domain_imports_infrastructure py_application_imports_infrastructure
+  py_clean_pass py_tools_run_as_modules py_domain_imports_infrastructure py_application_imports_infrastructure
   py_presentation_imports_infrastructure py_domain_imports_application py_failing_ruff_stops
   py_type_error py_no_tests_fails py_no_tests_allowed_while_bootstrapping
   run_from_subdirectory run_from_outside_repo run_through_symlink

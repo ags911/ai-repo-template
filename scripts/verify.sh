@@ -26,14 +26,27 @@ for d in ${REQUIRED_DIRS:-}; do
   [ -d "$d" ] || fail "required directory '$d' is missing; boundary checks would pass vacuously"
 done
 
+# Progress: one line per finished check with its time, so a long run is not silent.
+# The "=== ... ===" lines below are matched by the selftest and quoted in PR descriptions.
+read -ra profile_list <<< "$VERIFY_PROFILES"
+total=$(( ${#profile_list[@]} + 1 ))   # the profiles, then the suppressions check
+done_count=0
+
 for p in $VERIFY_PROFILES; do
   script="scripts/profiles/$p.sh"
   [ -f "$script" ] || fail "unknown profile '$p' (no $script)"
   echo "=== profile: $p ==="
+  started=$SECONDS
   bash "$script"
+  done_count=$(( done_count + 1 ))
+  echo "--- [$done_count/$total] $p passed in $(( SECONDS - started ))s"
 done
 
 echo "=== suppressions ==="
+started=$SECONDS
 bash scripts/check-suppressions.sh
+done_count=$(( done_count + 1 ))
+echo "--- [$done_count/$total] suppressions passed in $(( SECONDS - started ))s"
 
+echo "--- verify took ${SECONDS}s in total"
 echo "=== VERIFY PASSED ($VERIFY_PROFILES) ==="

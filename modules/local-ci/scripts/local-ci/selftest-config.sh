@@ -26,4 +26,9 @@ bash scripts/local-ci/run.sh > "$WORK/output" 2>&1 || rc=$?
 rc=0
 bash scripts/local-ci/run.sh --jobs 0 > "$WORK/output" 2>&1 || rc=$?
 [ "$rc" = 2 ] && grep -q 'positive number' "$WORK/output"
-echo 'local-ci configuration selftest: 3 passed, 0 failed'
+for invalid in 00 999999999999999999999999999999999; do
+  rc=0
+  bash scripts/local-ci/run.sh --jobs "$invalid" > "$WORK/output" 2>&1 || rc=$?
+  [ "$rc" = 2 ] && grep -q 'positive number' "$WORK/output"
+done
+echo 'local-ci configuration selftest: 5 passed, 0 failed'

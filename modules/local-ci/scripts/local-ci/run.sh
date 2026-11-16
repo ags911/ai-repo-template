@@ -50,7 +50,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-case $JOBS in ''|*[!0-9]*|0) die "--jobs needs a positive number" ;; esac
+case $JOBS in ''|*[!0-9]*) die "--jobs needs a positive number" ;; esac
+[ "$JOBS" -gt 0 ] 2>/dev/null || die "--jobs needs a positive number"
 
 GAP=${LOCAL_CI_GAP:-60}
 TICK=${LOCAL_CI_TICK:-5}

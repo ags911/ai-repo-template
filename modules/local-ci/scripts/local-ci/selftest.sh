@@ -176,7 +176,7 @@ expect "the same step without a pause fails (control)" pause-control "$rc" 1 \
   "!after a gap" "FAIL pause at step sleepy"
 
 # Kill and resume, part 1: run.sh dies; the lane carries on and a rerun follows it.
-(ci slow1 --lane slow) & pid=$!
+(cd "$REPO" && exec ./scripts/local-ci/run.sh --lane slow) > "$WORK/slow1" 2>&1 & pid=$!
 wait_for 120 has slow1 "run  wait"
 kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
 check "the lane keeps running after run.sh is killed" running slow
@@ -193,6 +193,14 @@ expect "killing the container fails the run" slow3 "$rc" 1 "container stopped"
 rc=0; ci slow4 --lane slow || rc=$?
 expect "after a kill, a rerun skips passed steps and runs the rest" slow4 "$rc" 0 \
   "skip one" "skip two" "run  wait" "pass four" "!run  one" "!clone"
+
+# Two coordinators can follow the same lane; removal by the first is not an outage.
+(ci shared1 --lane slow --fresh) & first=$!
+wait_for 120 has shared1 "run  wait"
+rc=0; ci shared2 --lane slow || rc=$?
+first_rc=0; wait "$first" || first_rc=$?
+expect "first coordinator completes a shared lane" shared1 "$first_rc" 0 "PASS slow"
+expect "second coordinator accepts the same completed evidence" shared2 "$rc" 0 "PASS slow"
 
 # A new clone (the volume is gone) clears the lane's markers, so every step runs.
 rm -f "$STATE"/slow/four.*.ok

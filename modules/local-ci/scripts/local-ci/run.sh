@@ -274,6 +274,23 @@ while [ -n "${PENDING// /}" ]; do
   still=""
   for lane in $PENDING; do
     if ! st=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$NAME-$lane" 2>/dev/null); then
+      # Another coordinator can finish and remove a shared lane container first.
+      # Trust only a nonempty current step manifest whose markers all exist.
+      complete=1
+      [ -s "$STATE/$lane/steps" ] || complete=0
+      while IFS=$'\t' read -r step flags marker cmd; do
+        [ -f "$STATE/$lane/$marker" ] || complete=0
+      done < "$STATE/$lane/steps"
+      if [ "$complete" = 1 ] && docker volume inspect "$NAME-$lane" >/dev/null 2>&1; then
+        RESULTS="$RESULTS $lane=pass"
+        continue
+      fi
+      if docker info >/dev/null 2>&1; then
+        if [ -f "$STATE/$lane/failed" ]; then RESULTS="$RESULTS $lane=fail:$(cat "$STATE/$lane/failed")"
+        else RESULTS="$RESULTS $lane=stopped:missing"
+        fi
+        continue
+      fi
       misses=$((misses + 1))
       [ "$misses" -lt 100 ] || die "Docker unreachable for 5 minutes; the lanes may still be running. Run again to follow them."
       still="$still $lane"

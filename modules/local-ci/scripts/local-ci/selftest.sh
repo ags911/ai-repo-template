@@ -57,15 +57,19 @@ slow   one     -    echo one
 slow   two     -    echo two
 slow   wait    -    sleep 8
 slow   four    -    echo four
-bound1 wait    -    sleep 2
-bound2 wait    -    sleep 2
-bound3 wait    -    sleep 2
+bound1 wait    -    sh steps/hold.sh
+bound2 wait    -    sh steps/hold.sh
+bound3 wait    -    sh steps/hold.sh
 EOF
 # Fails the first time it runs in a container, after sleeping $2 seconds; passes after that.
 cat > "$REPO/steps/flaky-once.sh" <<'EOF'
 f=/tmp/attempted-$1
 if [ -f "$f" ]; then echo "second attempt passes"; exit 0; fi
 touch "$f"; sleep "$2"; echo "first attempt fails"; exit 1
+EOF
+# A host-controlled barrier proves overlap without assuming Docker starts quickly.
+cat > "$REPO/steps/hold.sh" <<'EOF'
+while [ ! -f /work/release ]; do sleep 0.1; done
 EOF
 # A fake gh: logs each call; fails the first $GH_FAIL_FIRST calls like a dropped network;
 # answers 404 when GH_REFUSE is set.
@@ -143,24 +147,41 @@ expect "a net step is retried" net "$rc" 0 "retry 2/3" "second attempt passes" "
 rc=0; ci nonet --lane nonet || rc=$?
 expect "a step without net is not retried" nonet "$rc" 1 "!retry" "FAIL nonet at step fetch"
 
-# The scheduler must serialize when bounded to one and overlap when bounded to two.
-start=$SECONDS
-rc=0; ci serial --lane bound1 --lane bound2 --lane bound3 --jobs 1 || rc=$?
-expect "bounded serial run passes" serial "$rc" 0 "PASS bound1" "PASS bound3"
-serial=$((SECONDS - start))
-start=$SECONDS
-(ci parallel --lane bound1 --lane bound2 --lane bound3 --jobs 2 --fresh) & bound_pid=$!
-max_active=0
-while kill -0 "$bound_pid" 2>/dev/null; do
-  count=$(docker ps -q --filter "label=local-ci.name=$NAME" | wc -l | tr -d ' ')
-  [ "$count" -le "$max_active" ] || max_active=$count
-  sleep 0.25
+# Hold lanes until the requested number is running, then release that batch.
+# An ignored limit would expose too many containers; unintended serialization
+# would time out waiting for the second held lane.
+for limit in 1 2; do
+  (ci "bound-$limit" --lane bound1 --lane bound2 --lane bound3 --jobs "$limit" --fresh) & bound_pid=$!
+  released=" "
+  released_count=0
+  max_active=0
+  deadline=$((SECONDS + 120))
+  while kill -0 "$bound_pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do
+    active=$(docker ps --filter "label=local-ci.name=$NAME" --filter "name=$NAME-bound" --format '{{.Names}}')
+    count=$(printf '%s\n' "$active" | sed '/^$/d' | wc -l | tr -d ' ')
+    [ "$count" -le "$max_active" ] || max_active=$count
+    wanted=$limit
+    remaining=$((3 - released_count))
+    [ "$remaining" -ge "$wanted" ] || wanted=$remaining
+    if [ "$count" -ge "$wanted" ] && [ "$wanted" -gt 0 ]; then
+      for container in $active; do
+        case "$released" in *" $container "*) continue ;; esac
+        docker exec "$container" touch /work/release
+        released="$released$container "
+        released_count=$((released_count + 1))
+      done
+    fi
+    sleep 0.25
+  done
+  rc=0
+  if kill -0 "$bound_pid" 2>/dev/null; then
+    kill "$bound_pid" 2>/dev/null || true
+    rc=1
+  fi
+  wait "$bound_pid" || rc=$?
+  expect "bounded run with limit $limit passes" "bound-$limit" "$rc" 0 "PASS bound1" "PASS bound3"
+  check "active containers exactly respect limit $limit" test "$max_active" = "$limit"
 done
-rc=0; wait "$bound_pid" || rc=$?
-check "the scheduler starts two containers and never exceeds two" test "$max_active" = 2
-expect "bounded parallel run passes" parallel "$rc" 0 "PASS bound1" "PASS bound3"
-parallel=$((SECONDS - start))
-check "parallel lanes finish faster than the serial control" test "$parallel" -lt "$serial"
 
 # Sleep: pause the container while the step runs; it fails, sees the gap, reruns once.
 (ci pause --lane pause) & pid=$!

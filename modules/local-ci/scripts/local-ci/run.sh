@@ -126,7 +126,12 @@ if git show "$SHA:.verify.env" > "$TMP/verify.env" 2>/dev/null; then
   profiles=$(bash -c 'source "$1"; printf "%s" "$VERIFY_PROFILES"' bash "$TMP/verify.env")
   [ -n "${profiles// /}" ] || die "VERIFY_PROFILES is empty at HEAD"
   case " $profiles " in *" ts "*|*" python "*) ;; *) die "plan needs a configured stack profile" ;; esac
+  complete_verifier=0
+  for lane in $ALL_LANES; do
+    if cut -f3- "$TMP/$lane.steps" | grep -qxF 'bash scripts/verify.sh'; then complete_verifier=1; fi
+  done
   for profile in $profiles repository; do
+    [ "$complete_verifier" = 0 ] || break
     case "$profile" in
       ts|python) required="bash scripts/profiles/$profile.sh" ;;
       *) required="bash scripts/local-ci/repository.sh" ;;

@@ -258,3 +258,8 @@ self-reports, not protection against a malicious developer.
 Compare cold setup, warm complete verification and same-commit resume on the same
 machine before choosing a concurrency limit. More containers can be slower or run
 out of memory. Lane completion counts do not estimate remaining time.
+
+The example assumes the stack profiles and repository extras are independent.
+For coupled profiles whose order matters, put `bash scripts/verify.sh` in one lane
+instead. The plan validator accepts that complete authoritative command; it
+retains the verifier's ordering rather than attempting to infer dependencies.

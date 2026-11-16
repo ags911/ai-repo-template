@@ -163,8 +163,9 @@ plus what applies to Claude Code:
 See `modules/README.md`: domain glossary, ADRs, PRDs, agent memory, an architecture
 template with monolith and distributed profiles, real boundary checks
 (dependency-cruiser for TS, import-linter for Python), skills for ADRs, trade-off
-analysis, boundary-check generation, and quantum evaluation, and agent hooks that stop
-Claude Code and Codex finishing while verify fails.
+analysis, boundary-check generation, and quantum evaluation, agent hooks that stop
+Claude Code and Codex finishing while verify fails, and a resumable local CI that runs your
+checks in Docker on your machine and survives sleep, kill and network loss.
 
 ## Releases and upgrades
 A project made from this template is a copy: it doesn't receive later fixes. Each release on
@@ -194,6 +195,7 @@ project must do to keep verify passing.
   `verify` takes about 2 minutes, and each PR usually triggers 2–4 runs, so that covers
   roughly 250–500 PRs. Public repos run free. The workflows cancel a PR's superseded runs,
   cache dependencies, and time out after 15 minutes so a hung test can't use the month up.
+  The `local-ci` module runs the checks on your machine instead and posts a commit status.
 - A force-push to `main` can leave the pre-push commit unfetchable; the suppression check then
   fails in CI rather than passing unchecked.
 
@@ -204,7 +206,9 @@ failures that must stop the run, missing `REQUIRED_DIRS`, domain → infrastruct
 skips and suppressions with and without a reason, untracked files, deleted tests, the first
 push to `main`, and a clean pass. `selftest/ts-sample/` and `selftest/py-sample/` are the
 TypeScript and Python projects it uses, wired to `modules/boundaries-ts` and
-`modules/boundaries-python`. CI runs it in `.github/workflows/selftest.yml`. Repos created from the
+`modules/boundaries-python`. CI runs it in `.github/workflows/selftest.yml`. The same workflow runs
+`modules/local-ci/scripts/local-ci/selftest.sh`, which checks the local-ci module against real
+containers. Repos created from the
 template can delete `selftest/` and that workflow.
 
 ### Agent stress test

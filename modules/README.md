@@ -220,3 +220,41 @@ The `run.sh` header lists the settings (`LOCAL_CI_GAP`, `LOCAL_CI_NET_TRIES` and
 - Each lane clones your local repository, so its branches appear as `origin/<branch>` there.
 - The repo path must not contain `:` (Docker's `-v` syntax). Lane volumes stay until you
   remove them: `docker volume ls --filter name=local-ci-`.
+
+### Parallel execution and evidence boundaries
+
+Use `scripts/local-ci/run.sh --jobs 1` for serial execution, or `--jobs N` to bound
+concurrent lane containers (default 2). This includes containers rejoined from an
+interrupted run. Each lane has separate source and installed state. Steps in a lane
+execute in declaration order; setup/build steps must precede checks that need them.
+
+The example `lanes.conf` invokes authoritative `scripts/profiles/ts.sh` and
+`scripts/profiles/python.sh`. Its repository lane calls `repository.sh`, which runs
+configured extra profiles and suppression checks once. Copy that helper with the
+other module files. Remove unused stack lanes and adjust installation directories
+for your project. A committed `.verify.env` with a configured stack profile omitted
+from the plan is rejected, as is omission of the repository checks. This check
+requires the example's exact profile invocation commands; custom wrappers must keep
+the profile calls explicit in the plan.
+
+An explicit `--lane` selection is diagnostic, even if it names every lane. With
+`--post`, its context is `<LOCAL_CI_CONTEXT>-partial`; it cannot publish the full
+required status. Full runs still require every declared lane to pass. No live
+GitHub calls occur without `--post`.
+
+Set `LOCAL_CI_BASE_REF` to the verification base (default exported `BASE_REF`, then
+`origin/main`). It must resolve locally. Containers receive its resolved commit,
+so a moving base invalidates previous evidence. The host exports a bare repository
+with only snapshot/base refs and Git objects: host Git config, hooks and credential
+stores are not mounted. The original source repository is read, not modified.
+
+Image identity includes the runner scripts. Step markers include the preceding
+steps' identities and base commit, so changed prerequisites invalidate later
+steps. Deleting a lane volume invalidates its installed-state checkpoints, even
+when every step previously passed. New commits never reuse passing test results;
+only download caches may be reused. Local state and posted statuses remain trusted
+self-reports, not protection against a malicious developer.
+
+Compare cold setup, warm complete verification and same-commit resume on the same
+machine before choosing a concurrency limit. More containers can be slower or run
+out of memory. Lane completion counts do not estimate remaining time.

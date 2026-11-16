@@ -258,3 +258,14 @@ Re-run on 2026-11-11 after the second Codex audit's fixes (same versions):
   behaviour (removing, skipping or loosening still needs a human); after that, 3/3 (one run
   repeated after giving the harness permission to run `npm test`). Every task file filled in
   its "Suggested model and effort" line.
+
+## Parallel local CI (optional module)
+
+The `local-ci` module runs independent stack lanes concurrently, with a configurable
+limit (`--jobs 2` by default). Steps inside a lane remain ordered. Its example calls
+the same profile scripts as `scripts/verify.sh`; it does not duplicate validation
+commands. Ordinary verification stays sequential and needs no Docker.
+
+Explicit `--lane` runs are diagnostic: `--post` uses a separate `local-ci-partial`
+status. Only a run selecting the complete plan can post `local-ci`. See the module
+instructions for required-profile validation, source export, and checkpoint scope.

@@ -24,7 +24,7 @@ say() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 own() { [ -n "${HOST_UID:-}" ] && chown "$HOST_UID:${HOST_GID:-$HOST_UID}" "$@" 2>/dev/null; true; }
 
 # --- the clone ---------------------------------------------------------------
-key="$SHA $IMAGE"
+key="$SHA $IMAGE ${BASE_REF:?BASE_REF is required}"
 if [ "$(cat /work/.key 2>/dev/null)" != "$key" ] || [ ! -d /work/repo/.git ]; then
   say "clone $SHA (a new clone clears this lane's markers)"
   rm -f /state/*.ok /state/failed

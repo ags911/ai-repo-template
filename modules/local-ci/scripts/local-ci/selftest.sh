@@ -26,6 +26,7 @@ fi
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/local-ci-selftest.XXXXXX")
 REPO="$WORK/repo with spaces"
 NAME=local-ci-selftest-$$
+export LOCAL_CI_BASE_REF=main
 export LOCAL_CI_NAME=$NAME LOCAL_CI_GAP=4 LOCAL_CI_TICK=1 LOCAL_CI_NET_BACKOFF=1 LOCAL_CI_POST_BACKOFF=1
 
 cleanup() {
@@ -56,6 +57,9 @@ slow   one     -    echo one
 slow   two     -    echo two
 slow   wait    -    sleep 8
 slow   four    -    echo four
+bound1 wait    -    sleep 2
+bound2 wait    -    sleep 2
+bound3 wait    -    sleep 2
 EOF
 # Fails the first time it runs in a container, after sleeping $2 seconds; passes after that.
 cat > "$REPO/steps/flaky-once.sh" <<'EOF'
@@ -122,6 +126,9 @@ running() { [ "$(docker inspect -f '{{.State.Running}}' "$NAME-$1" 2>/dev/null)"
 tags() { docker image ls "$NAME" --format '{{.Tag}}'; }
 
 # --- cases ---------------------------------------------------------------------
+rc=0; ci invalid --jobs 0 || rc=$?
+expect "zero concurrency is rejected" invalid "$rc" 2 "positive number"
+
 rc=0; ci basic1 --lane basic || rc=$?
 expect "first run passes" basic1 "$rc" 0 "building image" "pass one" "pass three" "PASS basic"
 rc=0; ci basic2 --lane basic || rc=$?
@@ -135,6 +142,25 @@ rc=0; ci net --lane net || rc=$?
 expect "a net step is retried" net "$rc" 0 "retry 2/3" "second attempt passes" "PASS net"
 rc=0; ci nonet --lane nonet || rc=$?
 expect "a step without net is not retried" nonet "$rc" 1 "!retry" "FAIL nonet at step fetch"
+
+# The scheduler must serialize when bounded to one and overlap when bounded to two.
+start=$SECONDS
+rc=0; ci serial --lane bound1 --lane bound2 --lane bound3 --jobs 1 || rc=$?
+expect "bounded serial run passes" serial "$rc" 0 "PASS bound1" "PASS bound3"
+serial=$((SECONDS - start))
+start=$SECONDS
+(ci parallel --lane bound1 --lane bound2 --lane bound3 --jobs 2 --fresh) & bound_pid=$!
+max_active=0
+while kill -0 "$bound_pid" 2>/dev/null; do
+  count=$(docker ps -q --filter "label=local-ci.name=$NAME" | wc -l | tr -d ' ')
+  [ "$count" -le "$max_active" ] || max_active=$count
+  sleep 0.25
+done
+rc=0; wait "$bound_pid" || rc=$?
+check "the scheduler starts two containers and never exceeds two" test "$max_active" = 2
+expect "bounded parallel run passes" parallel "$rc" 0 "PASS bound1" "PASS bound3"
+parallel=$((SECONDS - start))
+check "parallel lanes finish faster than the serial control" test "$parallel" -lt "$serial"
 
 # Sleep: pause the container while the step runs; it fails, sees the gap, reruns once.
 (ci pause --lane pause) & pid=$!
@@ -174,6 +200,10 @@ docker volume rm "$NAME-slow" >/dev/null
 rc=0; ci slow5 --lane slow || rc=$?
 expect "a new clone clears the lane's markers" slow5 "$rc" 0 "clone" "run  one" "run  four" "!skip one"
 
+docker volume rm "$NAME-basic" >/dev/null
+rc=0; ci deleted-volume --lane basic || rc=$?
+expect "a fully passed lane reruns after its volume is deleted" deleted-volume "$rc" 0 "run  one" "!every step passed earlier"
+
 # Editing the Dockerfile: a new tag, the old one pruned, and the steps rerun on the new image.
 before=$(tags)
 echo 'LABEL selftest=changed' >> "$REPO/scripts/local-ci/Dockerfile"
@@ -182,12 +212,21 @@ after=$(tags)
 expect "editing the Dockerfile builds a new image and reruns the steps" image "$rc" 0 "building image" "run  one"
 check "the old image tag is pruned" test "$(printf '%s\n' "$after" | wc -l | tr -d ' ')" = 1 -a "$after" != "$before"
 
+# A changed prerequisite invalidates downstream checkpoints, even at the same SHA.
+printf '\nbasic four - echo changed\n' >> "$REPO/scripts/local-ci/lanes.conf"
+rc=0; ci prerequisite --lane basic || rc=$?
+expect "a new downstream step runs" prerequisite "$rc" 0 "pass four"
+sed -i.bak 's/basic  one     -    echo one/basic  one     -    echo changed-one/' "$REPO/scripts/local-ci/lanes.conf"
+rc=0; ci invalidated --lane basic || rc=$?
+expect "changed prerequisite invalidates later steps" invalidated "$rc" 0 "run  two" "run  four"
+
 # Posting, with the fake gh first on PATH.
 export PATH="$WORK/bin:$PATH" GH_LOG="$WORK/gh.log"
 rc=0; ci nopost --lane basic || rc=$?
 check "without --post nothing is posted" test "$rc" = 0 -a ! -e "$GH_LOG"
 rc=0; GH_FAIL_FIRST=2 ci post --post --lane basic || rc=$?
-expect "the status is retried until it gets through" post "$rc" 0 "attempt 2" "posted status local-ci=success"
+expect "the status is retried until it gets through" post "$rc" 0 "attempt 2" "posted status local-ci-partial=success"
+check "partial selection cannot publish the full context" grep -q 'context=local-ci-partial' "$GH_LOG"
 check "it took three calls, the last with state=success for the commit" \
   grep -q "statuses/$(git -C "$REPO" rev-parse HEAD) .*state=success" <(sed -n 3p "$GH_LOG")
 rm -f "$GH_LOG"

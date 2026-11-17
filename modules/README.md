@@ -15,6 +15,7 @@ do whatever its section below says.
 | `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, quanta, schema migrations and refactoring |
 | `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
+| `local-ci` | CI on a self-hosted runner on a laptop keeps failing when it sleeps or loses the network, or Actions minutes are running out |
 
 ## glossary
 Fill in real terms. Delete the example row.
@@ -162,3 +163,60 @@ the numbers for your project; the defaults are a starting point, not a standard.
   Ruff has no file-length rule; statement count bounds function size instead.
 
 The selftest proves each limit fails on a deliberate violation.
+
+## local-ci
+Runs your checks in Docker on your own machine, outside GitHub Actions, and can post the
+result as a commit status. It resumes where it stopped after the laptop sleeps, the network
+drops, or the run is killed.
+
+**When it helps.** GitHub fails a self-hosted runner's job when the runner stops sending its
+heartbeat ("The self-hosted runner lost communication with the server"). On a laptop, closing
+the lid or a dropped network does that, and the job starts again from the beginning. Hosted
+runners avoid it but use Actions minutes on private repos (see "Known limits" in the README).
+This module has no runner to lose: the checks run in local containers, and GitHub only
+receives the finished status.
+
+**Install.**
+1. Copy `scripts/local-ci/` into your repo. `/scripts/` is already in CODEOWNERS.
+2. Edit `scripts/local-ci/lanes.conf`: one line per step (lane, step name, `-` or `net`,
+   command). The example mirrors the `ts` and `python` verify profiles.
+3. Edit `scripts/local-ci/Dockerfile` so the image has every tool your steps call.
+4. Run `scripts/local-ci/selftest.sh` once. It proves the pause and kill-resume behaviour on
+   your machine with its own small lanes, not yours (about three minutes).
+5. Run `scripts/local-ci/run.sh`. Add `--post` to post the result as the `local-ci` commit
+   status (needs `gh`, signed in, and the commit pushed). After the first post you can select
+   `local-ci` under "Require status checks" in branch protection.
+
+It needs bash, git and Docker. On macOS, Docker Desktop must share the repo's folder (it
+shares `/Users` by default).
+
+**How it works.**
+- **Lanes.** Each lane runs in its own detached container with its own clone of the commit,
+  kept in a Docker volume. Lanes run at the same time and don't share files. A lane keeps
+  running if `run.sh` stops; running it again follows the lane to the end.
+- **Checkpoints.** Each step that passes writes a marker under `.git/local-ci/<commit>/`, so a
+  rerun skips it. A marker names the step and a hash of its command and the image, so editing
+  either reruns it. A new clone (a new commit, a new image, or a deleted volume) clears the
+  lane's markers, since what earlier steps installed went with the old clone. `--fresh`
+  starts over.
+- **Sleep.** Each lane checks the clock every 5 seconds. A step that fails after the clock
+  jumped by more than 60 seconds (the laptop slept, or `docker pause`) reruns once.
+- **Network.** Steps flagged `net` are retried, with a growing wait (3 attempts by default),
+  and so is the image build. `--post` retries the status until GitHub accepts it; a 4xx
+  answer other than 429 stops it.
+- **Housekeeping.** The image tag is a hash of the Dockerfile and the optional `image/` build
+  folder; older tags are pruned. Without `--post`, nothing leaves your machine.
+
+The `run.sh` header lists the settings (`LOCAL_CI_GAP`, `LOCAL_CI_NET_TRIES` and others).
+
+**Limits.**
+- It tests the commit at HEAD, not uncommitted changes.
+- A commit status is self-reported: anyone with write access can post `local-ci=success`.
+  That suits a solo developer or a small trusted team. Keep the hosted `verify` workflow where
+  you need CI you don't have to trust, such as pull requests from outside contributors.
+- Only the lane's volume (`/work`) outlives a container, so the Dockerfile keeps tool caches
+  and uv's Python there. If a step installs something elsewhere, a resumed lane won't have it.
+- Steps must be safe to run twice: an interrupted or failed step reruns from the start.
+- Each lane clones your local repository, so its branches appear as `origin/<branch>` there.
+- The repo path must not contain `:` (Docker's `-v` syntax). Lane volumes stay until you
+  remove them: `docker volume ls --filter name=local-ci-`.

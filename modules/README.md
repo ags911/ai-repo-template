@@ -16,6 +16,7 @@ do whatever its section below says.
 | `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
 | `local-ci` | CI on a self-hosted runner on a laptop keeps failing when it sleeps or loses the network, or Actions minutes are running out |
+| `ci-fallback` (planned, not built) | You run CI on a second cloud provider and want GitHub-hosted runners to take over when it runs out of free credits or goes down |
 
 ## glossary
 Fill in real terms. Delete the example row.
@@ -263,3 +264,65 @@ The example assumes the stack profiles and repository extras are independent.
 For coupled profiles whose order matters, put `bash scripts/verify.sh` in one lane
 instead. The plan validator accepts that complete authoritative command; it
 retains the verifier's ordering rather than attempting to infer dependencies.
+
+## ci-fallback (planned, not built)
+A design, not code yet. It will be built once a project has run CI on a second provider long
+enough to measure how long a run takes and what it costs, because the module's deadlines and
+budget come from those measurements. Until then, switching provider is a manual change.
+
+**The problem.** A project that runs CI on another provider's free allowance (CircleCI, for
+example) before falling back to GitHub-hosted runners has to notice, by hand, when the
+allowance is used up or the provider is down, and switch. Pull requests wait in the meantime.
+
+**What it will do.** Move validation from the primary provider to GitHub-hosted runners by
+itself, for one commit at a time, when the primary gives no result in time. It is opt-in.
+
+- **One direction only.** Primary provider to GitHub-hosted runners. Never back again by
+  itself, and never to `local-ci` or a self-hosted runner: running CI on your own machine
+  stays your decision.
+- **Off by default.** A committed policy file holds `enabled: false`, the provider order, two
+  deadlines and the one-switch limit. Turning it on is a reviewed pull request. A repository
+  variable may switch it off at once, never on.
+- **A spending stop first.** Turn it on only after setting a GitHub budget that stops usage
+  when reached. GitHub's free minutes are shared by every private repository on the account,
+  so an estimate cannot keep fallback runs free. A new budget does not count usage from
+  earlier in the same billing cycle.
+- **The trigger is a watchdog on GitHub.** On each pull request event, a small workflow waits
+  for the primary's result on the exact head commit. It falls back when no run started
+  within the start deadline (credits used up, a lost trigger, a stuck queue or an outage all
+  look the same, and it does not need to know which), or when a run started but finished
+  nothing within the completion deadline. A run that reported failing checks is a result:
+  it **never** causes fallback, even past the completion deadline.
+- **Signals it will not switch on.** Usage reports and status pages can warn, but they are
+  delayed or describe the platform rather than your project, and providers do not
+  necessarily document a call that returns your remaining credit. So they never switch
+  provider by themselves.
+- **One decision per commit.** The watchdog records what it decided (provider and reason)
+  on the commit, once. At most one switch per commit; a new push starts with the primary
+  again. Decisions for one commit are serialised, so two events cannot both switch. GitHub's
+  check runs can be updated and a status shows only its latest value, so the module decides
+  which record is authoritative and rejects a conflicting one.
+- **Only the chosen provider's result counts.** The required check passes only for the
+  provider the decision names, on that exact commit. A check of the same name from the
+  replaced provider, or from an older commit, does not count. Where branch protection is
+  available, pin the check's expected source.
+- **No double runs.** Before the GitHub run starts, the watchdog cancels the primary's run
+  for that commit. If it cannot confirm the cancellation, it stops and asks, unless the
+  policy allows a possible double run.
+- **The same checks and secrets.** The fallback runs the same `scripts/verify.sh` profiles
+  as the primary, on GitHub-hosted runners, and keeps any private credential to the job that
+  needs it. The watchdog's own token never reaches pull-request code.
+- **When GitHub is unusable too,** the watchdog fails with a message suggesting `local-ci`
+  (with `--post`). It never starts it.
+
+**Settings it will have.** `enabled`, the provider order, the start and completion deadlines
+(set from your measured run times, queue time included), the one-switch limit, whether a
+possible double run is allowed (default no), and the off switch.
+
+**Tests it will need.** No run started; a run that hangs; a failing run that must not fall
+back; two pushes racing; a cancelled primary that keeps running; a check of the right name
+from the wrong provider; and the token's absence from pull-request jobs.
+
+**Without a second provider** do not install it: the core `verify` workflow is already the
+GitHub path. Without GitHub minutes, it cannot help; use `local-ci`.
+

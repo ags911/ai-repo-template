@@ -26,6 +26,7 @@ fi
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/local-ci-selftest.XXXXXX")
 REPO="$WORK/repo with spaces"
 NAME=local-ci-selftest-$$
+export LOCAL_CI_BASE_REF=main
 export LOCAL_CI_NAME=$NAME LOCAL_CI_GAP=4 LOCAL_CI_TICK=1 LOCAL_CI_NET_BACKOFF=1 LOCAL_CI_POST_BACKOFF=1
 
 cleanup() {
@@ -56,12 +57,19 @@ slow   one     -    echo one
 slow   two     -    echo two
 slow   wait    -    sleep 8
 slow   four    -    echo four
+bound1 wait    -    sh steps/hold.sh
+bound2 wait    -    sh steps/hold.sh
+bound3 wait    -    sh steps/hold.sh
 EOF
 # Fails the first time it runs in a container, after sleeping $2 seconds; passes after that.
 cat > "$REPO/steps/flaky-once.sh" <<'EOF'
 f=/tmp/attempted-$1
 if [ -f "$f" ]; then echo "second attempt passes"; exit 0; fi
 touch "$f"; sleep "$2"; echo "first attempt fails"; exit 1
+EOF
+# A host-controlled barrier proves overlap without assuming Docker starts quickly.
+cat > "$REPO/steps/hold.sh" <<'EOF'
+while [ ! -f /work/release ]; do sleep 0.1; done
 EOF
 # A fake gh: logs each call; fails the first $GH_FAIL_FIRST calls like a dropped network;
 # answers 404 when GH_REFUSE is set.
@@ -122,6 +130,9 @@ running() { [ "$(docker inspect -f '{{.State.Running}}' "$NAME-$1" 2>/dev/null)"
 tags() { docker image ls "$NAME" --format '{{.Tag}}'; }
 
 # --- cases ---------------------------------------------------------------------
+rc=0; ci invalid --jobs 0 || rc=$?
+expect "zero concurrency is rejected" invalid "$rc" 2 "positive number"
+
 rc=0; ci basic1 --lane basic || rc=$?
 expect "first run passes" basic1 "$rc" 0 "building image" "pass one" "pass three" "PASS basic"
 rc=0; ci basic2 --lane basic || rc=$?
@@ -135,6 +146,42 @@ rc=0; ci net --lane net || rc=$?
 expect "a net step is retried" net "$rc" 0 "retry 2/3" "second attempt passes" "PASS net"
 rc=0; ci nonet --lane nonet || rc=$?
 expect "a step without net is not retried" nonet "$rc" 1 "!retry" "FAIL nonet at step fetch"
+
+# Hold lanes until the requested number is running, then release that batch.
+# An ignored limit would expose too many containers; unintended serialization
+# would time out waiting for the second held lane.
+for limit in 1 2; do
+  (ci "bound-$limit" --lane bound1 --lane bound2 --lane bound3 --jobs "$limit" --fresh) & bound_pid=$!
+  released=" "
+  released_count=0
+  max_active=0
+  deadline=$((SECONDS + 120))
+  while kill -0 "$bound_pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do
+    active=$(docker ps --filter "label=local-ci.name=$NAME" --filter "name=$NAME-bound" --format '{{.Names}}')
+    count=$(printf '%s\n' "$active" | sed '/^$/d' | wc -l | tr -d ' ')
+    [ "$count" -le "$max_active" ] || max_active=$count
+    wanted=$limit
+    remaining=$((3 - released_count))
+    [ "$remaining" -ge "$wanted" ] || wanted=$remaining
+    if [ "$count" -ge "$wanted" ] && [ "$wanted" -gt 0 ]; then
+      for container in $active; do
+        case "$released" in *" $container "*) continue ;; esac
+        docker exec "$container" touch /work/release
+        released="$released$container "
+        released_count=$((released_count + 1))
+      done
+    fi
+    sleep 0.25
+  done
+  rc=0
+  if kill -0 "$bound_pid" 2>/dev/null; then
+    kill "$bound_pid" 2>/dev/null || true
+    rc=1
+  fi
+  wait "$bound_pid" || rc=$?
+  expect "bounded run with limit $limit passes" "bound-$limit" "$rc" 0 "PASS bound1" "PASS bound3"
+  check "active containers exactly respect limit $limit" test "$max_active" = "$limit"
+done
 
 # Sleep: pause the container while the step runs; it fails, sees the gap, reruns once.
 (ci pause --lane pause) & pid=$!
@@ -150,7 +197,7 @@ expect "the same step without a pause fails (control)" pause-control "$rc" 1 \
   "!after a gap" "FAIL pause at step sleepy"
 
 # Kill and resume, part 1: run.sh dies; the lane carries on and a rerun follows it.
-(ci slow1 --lane slow) & pid=$!
+(cd "$REPO" && exec ./scripts/local-ci/run.sh --lane slow) > "$WORK/slow1" 2>&1 & pid=$!
 wait_for 120 has slow1 "run  wait"
 kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
 check "the lane keeps running after run.sh is killed" running slow
@@ -168,11 +215,23 @@ rc=0; ci slow4 --lane slow || rc=$?
 expect "after a kill, a rerun skips passed steps and runs the rest" slow4 "$rc" 0 \
   "skip one" "skip two" "run  wait" "pass four" "!run  one" "!clone"
 
+# Two coordinators can follow the same lane; removal by the first is not an outage.
+(ci shared1 --lane slow --fresh) & first=$!
+wait_for 120 has shared1 "run  wait"
+rc=0; ci shared2 --lane slow || rc=$?
+first_rc=0; wait "$first" || first_rc=$?
+expect "first coordinator completes a shared lane" shared1 "$first_rc" 0 "PASS slow"
+expect "second coordinator accepts the same completed evidence" shared2 "$rc" 0 "PASS slow"
+
 # A new clone (the volume is gone) clears the lane's markers, so every step runs.
 rm -f "$STATE"/slow/four.*.ok
 docker volume rm "$NAME-slow" >/dev/null
 rc=0; ci slow5 --lane slow || rc=$?
 expect "a new clone clears the lane's markers" slow5 "$rc" 0 "clone" "run  one" "run  four" "!skip one"
+
+docker volume rm "$NAME-basic" >/dev/null
+rc=0; ci deleted-volume --lane basic || rc=$?
+expect "a fully passed lane reruns after its volume is deleted" deleted-volume "$rc" 0 "run  one" "!every step passed earlier"
 
 # Editing the Dockerfile: a new tag, the old one pruned, and the steps rerun on the new image.
 before=$(tags)
@@ -182,12 +241,21 @@ after=$(tags)
 expect "editing the Dockerfile builds a new image and reruns the steps" image "$rc" 0 "building image" "run  one"
 check "the old image tag is pruned" test "$(printf '%s\n' "$after" | wc -l | tr -d ' ')" = 1 -a "$after" != "$before"
 
+# A changed prerequisite invalidates downstream checkpoints, even at the same SHA.
+printf '\nbasic four - echo changed\n' >> "$REPO/scripts/local-ci/lanes.conf"
+rc=0; ci prerequisite --lane basic || rc=$?
+expect "a new downstream step runs" prerequisite "$rc" 0 "pass four"
+sed -i.bak 's/basic  one     -    echo one/basic  one     -    echo changed-one/' "$REPO/scripts/local-ci/lanes.conf"
+rc=0; ci invalidated --lane basic || rc=$?
+expect "changed prerequisite invalidates later steps" invalidated "$rc" 0 "run  two" "run  four"
+
 # Posting, with the fake gh first on PATH.
 export PATH="$WORK/bin:$PATH" GH_LOG="$WORK/gh.log"
 rc=0; ci nopost --lane basic || rc=$?
 check "without --post nothing is posted" test "$rc" = 0 -a ! -e "$GH_LOG"
 rc=0; GH_FAIL_FIRST=2 ci post --post --lane basic || rc=$?
-expect "the status is retried until it gets through" post "$rc" 0 "attempt 2" "posted status local-ci=success"
+expect "the status is retried until it gets through" post "$rc" 0 "attempt 2" "posted status local-ci-partial=success"
+check "partial selection cannot publish the full context" grep -q 'context=local-ci-partial' "$GH_LOG"
 check "it took three calls, the last with state=success for the commit" \
   grep -q "statuses/$(git -C "$REPO" rev-parse HEAD) .*state=success" <(sed -n 3p "$GH_LOG")
 rm -f "$GH_LOG"

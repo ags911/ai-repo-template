@@ -41,7 +41,10 @@ async function layoutProblems(page: Page): Promise<string[]> {
     const controls = 'button, [role="button"], [role="combobox"], [role="switch"], input:not([type="hidden"]), textarea, select'
     for (const el of document.querySelectorAll<HTMLElement>(controls)) {
       if (!visible(el)) continue
-      const r = el.getBoundingClientRect()
+      // A control inside a <label> is clicked through the label, so the label is the target
+      // (WCAG 2.5.8 counts the whole clickable area). This assumes a native <label> that
+      // activates the control; a styled <div> that only looks like a label does not count.
+      const r = (el.closest("label") ?? el).getBoundingClientRect()
       if (r.width < 24 || r.height < 24) out.push(`"${name(el)}" is ${Math.round(r.width)}x${Math.round(r.height)}px, under 24px`)
     }
 

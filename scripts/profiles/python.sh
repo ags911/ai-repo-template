@@ -2,6 +2,10 @@
 # Python profile: ruff (lint + format), mypy, pytest, and import-linter if configured.
 # Uses `uv run --locked` when a uv.lock is present (fails if the lockfile is out of date
 # instead of rewriting it), otherwise the active Python environment.
+# Tools run as `python -m <tool>`, not through their console-script launchers. When the
+# project path contains a space, uv writes those launchers as `#!/bin/sh` scripts, and
+# macOS strips DYLD_* variables from protected binaries such as /bin/sh, so a test that
+# loads a native library through DYLD_FALLBACK_LIBRARY_PATH would fail only under verify.
 set -euo pipefail
 source .verify.env
 cd "${PY_DIR:-.}"
@@ -11,7 +15,7 @@ fail() { echo "PYTHON PROFILE FAILED: $*" >&2; exit 1; }
 
 if [ -f uv.lock ]; then
   command -v uv >/dev/null || fail "uv.lock present but uv is not installed"
-  run() { uv run --locked "$@"; }
+  run() { uv run --locked python -m "$@"; }
 else
   run() { python -m "$@"; }
 fi

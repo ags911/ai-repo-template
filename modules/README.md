@@ -15,6 +15,8 @@ do whatever its section below says.
 | `skills` | You use Claude Code or Codex and want repeatable procedures for ADRs, trade-offs, boundary checks, quanta, schema migrations and refactoring |
 | `complexity` | Files and functions keep growing and you want size and complexity limits enforced |
 | `agent-hooks` | Agents sometimes say they're done without running verify, or you want verify before every push |
+| `local-ci` | CI on a self-hosted runner on a laptop keeps failing when it sleeps or loses the network, or Actions minutes are running out |
+| `ci-fallback` (planned, not built) | You run CI on a second cloud provider and want GitHub-hosted runners to take over when it runs out of free credits or goes down |
 
 ## glossary
 Fill in real terms. Delete the example row.
@@ -162,3 +164,165 @@ the numbers for your project; the defaults are a starting point, not a standard.
   Ruff has no file-length rule; statement count bounds function size instead.
 
 The selftest proves each limit fails on a deliberate violation.
+
+## local-ci
+Runs your checks in Docker on your own machine, outside GitHub Actions, and can post the
+result as a commit status. It resumes where it stopped after the laptop sleeps, the network
+drops, or the run is killed.
+
+**When it helps.** GitHub fails a self-hosted runner's job when the runner stops sending its
+heartbeat ("The self-hosted runner lost communication with the server"). On a laptop, closing
+the lid or a dropped network does that, and the job starts again from the beginning. Hosted
+runners avoid it but use Actions minutes on private repos (see "Known limits" in the README).
+This module has no runner to lose: the checks run in local containers, and GitHub only
+receives the finished status.
+
+**Install.**
+1. Copy `scripts/local-ci/` into your repo. `/scripts/` is already in CODEOWNERS.
+2. Edit `scripts/local-ci/lanes.conf`: one line per step (lane, step name, `-` or `net`,
+   command). The example mirrors the `ts` and `python` verify profiles.
+3. Edit `scripts/local-ci/Dockerfile` so the image has every tool your steps call.
+4. Run `scripts/local-ci/selftest.sh` once. It proves the pause and kill-resume behaviour on
+   your machine with its own small lanes, not yours (about three minutes).
+5. Run `scripts/local-ci/run.sh`. Add `--post` to post the result as the `local-ci` commit
+   status (needs `gh`, signed in, and the commit pushed). After the first post you can select
+   `local-ci` under "Require status checks" in branch protection.
+
+It needs bash, git and Docker. On macOS, Docker Desktop must share the repo's folder (it
+shares `/Users` by default).
+
+**How it works.**
+- **Lanes.** Each lane runs in its own detached container with its own clone of the commit,
+  kept in a Docker volume. Lanes run at the same time and don't share files. A lane keeps
+  running if `run.sh` stops; running it again follows the lane to the end.
+- **Checkpoints.** Each step that passes writes a marker under `.git/local-ci/<commit>/`, so a
+  rerun skips it. A marker names the step and a hash of its command and the image, so editing
+  either reruns it. A new clone (a new commit, a new image, or a deleted volume) clears the
+  lane's markers, since what earlier steps installed went with the old clone. `--fresh`
+  starts over.
+- **Sleep.** Each lane checks the clock every 5 seconds. A step that fails after the clock
+  jumped by more than 60 seconds (the laptop slept, or `docker pause`) reruns once.
+- **Network.** Steps flagged `net` are retried, with a growing wait (3 attempts by default),
+  and so is the image build. `--post` retries the status until GitHub accepts it; a 4xx
+  answer other than 429 stops it.
+- **Housekeeping.** The image tag is a hash of the Dockerfile and the optional `image/` build
+  folder; older tags are pruned. Without `--post`, nothing leaves your machine.
+
+The `run.sh` header lists the settings (`LOCAL_CI_GAP`, `LOCAL_CI_NET_TRIES` and others).
+
+**Limits.**
+- It tests the commit at HEAD, not uncommitted changes.
+- A commit status is self-reported: anyone with write access can post `local-ci=success`.
+  That suits a solo developer or a small trusted team. Keep the hosted `verify` workflow where
+  you need CI you don't have to trust, such as pull requests from outside contributors.
+- Only the lane's volume (`/work`) outlives a container, so the Dockerfile keeps tool caches
+  and uv's Python there. If a step installs something elsewhere, a resumed lane won't have it.
+- Steps must be safe to run twice: an interrupted or failed step reruns from the start.
+- Each lane clones your local repository, so its branches appear as `origin/<branch>` there.
+- The repo path must not contain `:` (Docker's `-v` syntax). Lane volumes stay until you
+  remove them: `docker volume ls --filter name=local-ci-`.
+
+### Parallel execution and evidence boundaries
+
+Use `scripts/local-ci/run.sh --jobs 1` for serial execution, or `--jobs N` to bound
+concurrent lane containers (default 2). This includes containers rejoined from an
+interrupted run. Each lane has separate source and installed state. Steps in a lane
+execute in declaration order; setup/build steps must precede checks that need them.
+
+The example `lanes.conf` invokes authoritative `scripts/profiles/ts.sh` and
+`scripts/profiles/python.sh`. Its repository lane calls `repository.sh`, which runs
+configured extra profiles and suppression checks once. Copy that helper with the
+other module files. Remove unused stack lanes and adjust installation directories
+for your project. A committed `.verify.env` with a configured stack profile omitted
+from the plan is rejected, as is omission of the repository checks. This check
+requires the example's exact profile invocation commands; custom wrappers must keep
+the profile calls explicit in the plan.
+
+An explicit `--lane` selection is diagnostic, even if it names every lane. With
+`--post`, its context is `<LOCAL_CI_CONTEXT>-partial`; it cannot publish the full
+required status. Full runs still require every declared lane to pass. No live
+GitHub calls occur without `--post`.
+
+Set `LOCAL_CI_BASE_REF` to the verification base (default exported `BASE_REF`, then
+`origin/main`). It must resolve locally. Containers receive its resolved commit,
+so a moving base invalidates previous evidence. The host exports a bare repository
+with only snapshot/base refs and Git objects: host Git config, hooks and credential
+stores are not mounted. The original source repository is read, not modified.
+
+Image identity includes the runner scripts. Step markers include the preceding
+steps' identities and base commit, so changed prerequisites invalidate later
+steps. Deleting a lane volume invalidates its installed-state checkpoints, even
+when every step previously passed. New commits never reuse passing test results;
+only download caches may be reused. Local state and posted statuses remain trusted
+self-reports, not protection against a malicious developer.
+
+Compare cold setup, warm complete verification and same-commit resume on the same
+machine before choosing a concurrency limit. More containers can be slower or run
+out of memory. Lane completion counts do not estimate remaining time.
+
+The example assumes the stack profiles and repository extras are independent.
+For coupled profiles whose order matters, put `bash scripts/verify.sh` in one lane
+instead. The plan validator accepts that complete authoritative command; it
+retains the verifier's ordering rather than attempting to infer dependencies.
+
+## ci-fallback (planned, not built)
+A design, not code yet. It will be built once a project has run CI on a second provider long
+enough to measure how long a run takes and what it costs, because the module's deadlines and
+budget come from those measurements. Until then, switching provider is a manual change.
+
+**The problem.** A project that runs CI on another provider's free allowance (CircleCI, for
+example) before falling back to GitHub-hosted runners has to notice, by hand, when the
+allowance is used up or the provider is down, and switch. Pull requests wait in the meantime.
+
+**What it will do.** Move validation from the primary provider to GitHub-hosted runners by
+itself, for one commit at a time, when the primary gives no result in time. It is opt-in.
+
+- **One direction only.** Primary provider to GitHub-hosted runners. Never back again by
+  itself, and never to `local-ci` or a self-hosted runner: running CI on your own machine
+  stays your decision.
+- **Off by default.** A committed policy file holds `enabled: false`, the provider order, two
+  deadlines and the one-switch limit. Turning it on is a reviewed pull request. A repository
+  variable may switch it off at once, never on.
+- **A spending stop first.** Turn it on only after setting a GitHub budget that stops usage
+  when reached. GitHub's free minutes are shared by every private repository on the account,
+  so an estimate cannot keep fallback runs free. A new budget does not count usage from
+  earlier in the same billing cycle.
+- **The trigger is a watchdog on GitHub.** On each pull request event, a small workflow waits
+  for the primary's result on the exact head commit. It falls back when no run started
+  within the start deadline (credits used up, a lost trigger, a stuck queue or an outage all
+  look the same, and it does not need to know which), or when a run started but finished
+  nothing within the completion deadline. A run that reported failing checks is a result:
+  it **never** causes fallback, even past the completion deadline.
+- **Signals it will not switch on.** Usage reports and status pages can warn, but they are
+  delayed or describe the platform rather than your project, and providers do not
+  necessarily document a call that returns your remaining credit. So they never switch
+  provider by themselves.
+- **One decision per commit.** The watchdog records what it decided (provider and reason)
+  on the commit, once. At most one switch per commit; a new push starts with the primary
+  again. Decisions for one commit are serialised, so two events cannot both switch. GitHub's
+  check runs can be updated and a status shows only its latest value, so the module decides
+  which record is authoritative and rejects a conflicting one.
+- **Only the chosen provider's result counts.** The required check passes only for the
+  provider the decision names, on that exact commit. A check of the same name from the
+  replaced provider, or from an older commit, does not count. Where branch protection is
+  available, pin the check's expected source.
+- **No double runs.** Before the GitHub run starts, the watchdog cancels the primary's run
+  for that commit. If it cannot confirm the cancellation, it stops and asks, unless the
+  policy allows a possible double run.
+- **The same checks and secrets.** The fallback runs the same `scripts/verify.sh` profiles
+  as the primary, on GitHub-hosted runners, and keeps any private credential to the job that
+  needs it. The watchdog's own token never reaches pull-request code.
+- **When GitHub is unusable too,** the watchdog fails with a message suggesting `local-ci`
+  (with `--post`). It never starts it.
+
+**Settings it will have.** `enabled`, the provider order, the start and completion deadlines
+(set from your measured run times, queue time included), the one-switch limit, whether a
+possible double run is allowed (default no), and the off switch.
+
+**Tests it will need.** No run started; a run that hangs; a failing run that must not fall
+back; two pushes racing; a cancelled primary that keeps running; a check of the right name
+from the wrong provider; and the token's absence from pull-request jobs.
+
+**Without a second provider** do not install it: the core `verify` workflow is already the
+GitHub path. Without GitHub minutes, it cannot help; use `local-ci`.
+

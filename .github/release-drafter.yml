@@ -1,0 +1,15 @@
+# Release Drafter (template maintenance): keeps a draft release up to date as PRs merge.
+# Before publishing: set the version, write the upgrade notes, and bump the version line at
+# the top of .verify.env in a PR first (see README "Releases and upgrades").
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+version-resolver:
+  default: patch
+change-template: "- $TITLE (#$NUMBER)"
+template: |
+  ## Upgrade notes
+  _Write before publishing: what a project made from an earlier release should copy, and
+  which files. If nothing needs copying, say so._
+
+  ## Changes
+  $CHANGES

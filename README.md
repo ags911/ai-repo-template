@@ -44,8 +44,9 @@ runs on every PR, but nothing stops a merge while it is red or unreviewed.
 5. Replace `@your-handle` in CODEOWNERS, then in GitHub branch protection (or a ruleset) for
    `main` turn on "Require status checks" (select `verify`) and "Require review from Code
    Owners". Both need a public repo or a paid plan. In Settings > General, turn on
-   "Automatically delete head branches": GitHub then retargets PRs that were based on a
-   merged branch instead of closing them. Allow squash merging only, with the PR title and
+   "Automatically delete head branches" (or run `gh repo edit --delete-branch-on-merge`):
+   GitHub then retargets PRs that were based on a merged branch instead of closing them.
+   A repo created from this template does not inherit the setting. Allow squash merging only, with the PR title and
    description as the commit message, so `main` gets one commit per PR carrying the
    template's fields. Fill in `SECURITY.md`.
 6. The Actions in the workflows are pinned to commit SHAs. Dependabot (`.github/dependabot.yml`)

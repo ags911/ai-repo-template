@@ -40,7 +40,7 @@ jobs:
           scripts/ci-install-tool.sh gitleaks
           scripts/ci-install-tool.sh lychee
       - name: shellcheck
-        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh selftest/agent-eval.sh modules/agent-hooks/scripts/*.sh modules/agent-hooks/.githooks/pre-push modules/adr/scripts/profiles/*.sh
+        run: shellcheck -x scripts/*.sh scripts/profiles/*.sh selftest/run.sh selftest/agent-eval.sh modules/agent-hooks/scripts/*.sh modules/agent-hooks/.githooks/pre-push modules/adr/scripts/profiles/*.sh modules/local-ci/scripts/local-ci/*.sh
       # actionlint checks workflow syntax and expressions (verify.yml never runs here);
       # zizmor checks workflow security. Pinned; bump both by hand.
       - name: Lint workflows
@@ -49,6 +49,12 @@ jobs:
           uvx zizmor==1.32.0 --offline .github/workflows
       - name: Run selftest
         run: selftest/run.sh
+      - name: Validate local-ci plans without Docker
+        run: bash modules/local-ci/scripts/local-ci/selftest-config.sh
+      # Real containers: pause, kill and resume, retries, image pruning, and posting through a
+      # fake gh (nothing reaches GitHub). About three minutes.
+      - name: Run the local-ci module's selftest
+        run: modules/local-ci/scripts/local-ci/selftest.sh
 
   # The skills module keeps skills in .agents/skills with symlinks in .claude/skills.
   # Proves the README's Windows advice: with core.symlinks on, every skill resolves;

@@ -34,6 +34,12 @@ to `.verify-approvals`; never add lines there yourself.
 - Keep edits inside the task's scope. No unrequested rewrites, renames, or reformatting.
 - Prefer small, behaviour-preserving refactoring steps; run tests between them.
 - If a task won't fit in one reviewable PR, propose splitting it into issues before starting.
+- After your PR merges, clean up after yourself: remove its worktree (`git worktree remove`,
+  never `--force`), delete the local branch, and run `git fetch --prune`. A squash merge
+  hides the branch from `git branch --merged`, so first confirm the PR is merged
+  (`gh pr view`) and the branch has no commits the PR lacks. Never remove another session's
+  worktree or branch. Follow-up fixes go on a new branch from `main`: pushing to the merged
+  one recreates it with no PR. (unenforced)
 - When a reply explains something complex (a failure, a trade-off, a multi-step change),
   open with a short plain-English summary: what happened, what it means, and what the human
   needs to decide (unenforced).

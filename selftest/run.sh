@@ -357,6 +357,49 @@ case_ci_base_ref() {
   report ci_base_ref "$ok" "$why"; record ci_base_ref
 }
 
+case_ci_base_ref_manual() {
+  # workflow_dispatch and schedule have no diff of their own: merge base on a branch, first
+  # parent on the default branch itself (a merge commit's first parent is the old tip).
+  new_repo ci_base_ref_manual
+  local main_tip got ok=1 why="" empty script="$WORK/ci-base-ref.sh"
+  cp scripts/ci-base-ref.sh "$script"   # the root-commit case below removes the working tree
+  empty=$(git hash-object -t tree /dev/null)
+  main_tip=$(git rev-parse HEAD)
+  git update-ref refs/remotes/origin/main "$main_tip"
+  commit "work 1"
+  : > "$WORK/out.log"
+  for ev in workflow_dispatch schedule; do
+    got=$(EVENT=$ev "$script" 2>&1) || got="exit $?: $got"
+    [ "$got" = "$main_tip" ] || { ok=0; why="$why $ev on a branch gave '$got';"; }
+  done
+  # On the default branch: a merge commit gives its first parent.
+  git checkout -q main
+  git checkout -q -b side; commit "side"; git checkout -q main
+  git -c user.name=selftest -c user.email=selftest@example.invalid -c commit.gpgsign=false \
+    merge -q --no-ff -m "merge side" side
+  git update-ref refs/remotes/origin/main HEAD
+  got=$(EVENT=workflow_dispatch "$script" 2>&1) || got="exit $?: $got"
+  [ "$got" = "$main_tip" ] || { ok=0; why="$why merge commit gave '$got';"; }
+  # A DEFAULT_BRANCH other than main is honoured.
+  git update-ref refs/remotes/origin/trunk HEAD
+  got=$(EVENT=schedule DEFAULT_BRANCH=trunk "$script" 2>&1) || got="exit $?: $got"
+  [ "$got" = "$main_tip" ] || { ok=0; why="$why DEFAULT_BRANCH=trunk gave '$got';"; }
+  # A root commit on the default branch: the empty tree, so everything is checked.
+  git checkout -q --orphan root; git rm -rfq . ; commit "root"
+  git update-ref refs/remotes/origin/main HEAD
+  got=$(EVENT=workflow_dispatch "$script" 2>&1) || got="exit $?: $got"
+  [ "$got" = "$empty" ] || { ok=0; why="$why root commit gave '$got';"; }
+  # No default branch to compare with: a clear error, not a silent pass.
+  git update-ref -d refs/remotes/origin/main
+  if got=$(EVENT=workflow_dispatch "$script" 2>&1); then
+    ok=0; why="$why missing origin/main gave '$got';"
+  else
+    printf '%s' "$got" | grep -q "cannot find the default branch" \
+      || { ok=0; why="$why missing origin/main error was '$got';"; }
+  fi
+  report ci_base_ref_manual "$ok" "$why"; record ci_base_ref_manual
+}
+
 case_first_push_clean() {
   # First push to main: no previous commit, so the base is the empty tree and the
   # whole initial content is checked.
@@ -1304,7 +1347,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   secrets_missing_tool links_clean_pass links_missing_file links_missing_anchor links_missing_tool
   stop_hook_clean_tree_silent stop_hook_passing_verify_silent stop_hook_blocks_failing_verify
   stop_hook_lets_second_stop_through pre_push_blocks_failing_verify pre_push_allows_passing_verify
-  base_object_missing_ci binary_attribute_hides_skip skip_option_without_reason
+  base_object_missing_ci ci_base_ref_manual binary_attribute_hides_skip skip_option_without_reason
   gitleaks_allow_without_reason reason_in_test_name_not_enough empty_reason_not_enough
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
   secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date

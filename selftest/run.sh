@@ -1060,6 +1060,20 @@ case_extras_only_profiles_fail() {
   expect extras_only_profiles_fail fail "needs a stack profile"; record extras_only_profiles_fail
 }
 
+case_extras_only_allowed() {
+  # VERIFY_ALLOW_EXTRAS_ONLY=1 lets a CI job run extras alone; the refusal stays the default.
+  new_repo extras_only_allowed; set_env VERIFY_PROFILES "secrets"
+  expect extras_only_allowed pass "=== VERIFY PASSED (secrets) ===" VERIFY_ALLOW_EXTRAS_ONLY=1
+  # Only "1" counts as on.
+  expect extras_only_allowed_needs_one fail "needs a stack profile" VERIFY_ALLOW_EXTRAS_ONLY=true
+  # It does not excuse an empty list or an unknown profile.
+  set_env VERIFY_PROFILES ""
+  expect extras_only_allowed_not_empty fail "VERIFY_PROFILES is empty" VERIFY_ALLOW_EXTRAS_ONLY=1
+  set_env VERIFY_PROFILES "secrets lniks"
+  expect extras_only_allowed_not_unknown fail "unknown profile 'lniks'" VERIFY_ALLOW_EXTRAS_ONLY=1
+  record extras_only_allowed
+}
+
 case_quoted_skip_option() {
   new_repo quoted_skip_option
   printf 'import { test } from "node:test";\ntest("pending", { "sk''ip": true }, () => {});\n' > src/domain/pending.test.ts
@@ -1310,7 +1324,8 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date
   stop_hook_blocks_committed_failure stop_hook_remembers_pass py_open_hidden_by_method
   domain_imports_io_builtin_subpath
-  extras_only_profiles_fail quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
+  extras_only_profiles_fail
+  extras_only_allowed quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
   secrets_in_merge_resolution stop_hook_without_python stop_hook_uses_session_cwd
   stop_hook_untracked_boundaries stop_hook_no_base_committed_failure py_open_hidden_by_subscript
   application_reaches_infrastructure_via_barrel domain_imports_node_process

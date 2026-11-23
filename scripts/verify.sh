@@ -17,9 +17,14 @@ fail() { echo "VERIFY FAILED: $*" >&2; exit 1; }
 # shellcheck source=/dev/null
 source .verify.env
 [ -n "${VERIFY_PROFILES// /}" ] || fail "VERIFY_PROFILES is empty in .verify.env (set ts, python, or both)"
+# A stack profile is required by default, so a mistyped list ("tz") cannot pass by running
+# only extras. A CI job that deliberately runs extras alone (for example links on a docs-only
+# change) sets VERIFY_ALLOW_EXTRAS_ONLY=1; every named profile must still exist.
 case " $VERIFY_PROFILES " in
   *" ts "*|*" python "*) ;;
-  *) fail "VERIFY_PROFILES needs a stack profile (ts or python); secrets and links are extras" ;;
+  *)
+    [ "${VERIFY_ALLOW_EXTRAS_ONLY:-0}" = 1 ] \
+      || fail "VERIFY_PROFILES needs a stack profile (ts or python); secrets and links are extras (set VERIFY_ALLOW_EXTRAS_ONLY=1 to run extras alone)" ;;
 esac
 
 for d in ${REQUIRED_DIRS:-}; do

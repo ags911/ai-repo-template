@@ -357,6 +357,42 @@ case_ci_base_ref() {
   report ci_base_ref "$ok" "$why"; record ci_base_ref
 }
 
+case_test_port() {
+  # verify.sh exports one free TEST_PORT for the whole run (every profile sees the same value);
+  # a TEST_PORT already in the environment wins; two runs do not share a port.
+  new_repo test_port
+  local rec='require("fs").writeFileSync("PORT_" + process.argv[1], process.env.TEST_PORT ?? "unset")'
+  set_script lint "node -e '$rec' lint"
+  set_script test "node -e '$rec' test"
+  run_verify || true
+  local lint test ok=1 why=""
+  lint=$(cat PORT_lint 2>/dev/null || echo missing); test=$(cat PORT_test 2>/dev/null || echo missing)
+  case "$lint" in ''|*[!0-9]*) ok=0; why="lint saw TEST_PORT='$lint' (want a number);" ;; esac
+  [ "$lint" = "$test" ] || { ok=0; why="$why lint saw '$lint' but test saw '$test';"; }
+  local first="$lint"
+  run_verify || true
+  [ "$(cat PORT_lint)" != "unset" ] || { ok=0; why="$why second run had no port;"; }
+  # Explicit value wins.
+  run_verify TEST_PORT=4567 || true
+  [ "$(cat PORT_lint)" = 4567 ] && [ "$(cat PORT_test)" = 4567 ] \
+    || { ok=0; why="$why explicit TEST_PORT=4567 gave '$(cat PORT_lint)' and '$(cat PORT_test)';"; }
+  : > "$WORK/out.log"
+  report test_port "$ok" "$why (first run: $first)"; record test_port
+}
+
+case_test_port_no_python() {
+  # Without a working python3 the port stays unset (the project's own default applies) and verify still passes.
+  new_repo test_port_no_python
+  local rec='require("fs").writeFileSync("PORT_" + process.argv[1], process.env.TEST_PORT ?? "unset")'
+  set_script lint "node -e '$rec' lint"
+  # A python3 that cannot run, first on PATH (as on a machine where the command is only a stub).
+  local lone="$WORK/no-python-bin"
+  mkdir -p "$lone"; printf '#!/bin/sh\nexit 127\n' > "$lone/python3"; chmod +x "$lone/python3"
+  expect test_port_no_python pass "=== VERIFY PASSED (ts) ===" PATH="$lone:$PATH"
+  [ "$(cat PORT_lint)" = unset ] || report test_port_no_python_unset 0 "TEST_PORT was '$(cat PORT_lint)'"
+  record test_port_no_python
+}
+
 case_first_push_clean() {
   # First push to main: no previous commit, so the base is the empty tree and the
   # whole initial content is checked.
@@ -1312,7 +1348,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   domain_imports_io_builtin_subpath
   extras_only_profiles_fail quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
   secrets_in_merge_resolution stop_hook_without_python stop_hook_uses_session_cwd
-  stop_hook_untracked_boundaries stop_hook_no_base_committed_failure py_open_hidden_by_subscript
+  stop_hook_untracked_boundaries test_port test_port_no_python stop_hook_no_base_committed_failure py_open_hidden_by_subscript
   application_reaches_infrastructure_via_barrel domain_imports_node_process
   adr_clean_pass adr_bad_status adr_missing_successor adr_duplicate_number adr_not_in_index
   complexity_ts_clean_pass complexity_ts_too_many_params complexity_ts_too_complex complexity_ts_too_deep

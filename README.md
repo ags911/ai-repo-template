@@ -7,7 +7,7 @@ real need shows up. Supports TypeScript and Python projects, separately or side 
 | File | Purpose |
 | --- | --- |
 | `AGENTS.md` | Rules for coding agents. Short on purpose. |
-| `.verify.env` | Declares which stack profiles this repo uses. Nothing is auto-detected. |
+| `.verify.env` | Declares which stack profiles this repo uses. Nothing is auto-detected. Also exports `TEST_PORT`, a free port for browser-test servers, so parallel runs do not clash. |
 | `scripts/verify.sh` | The single verification command, run identically locally and in CI. |
 | `scripts/profiles/` | One script per stack (`ts`, `python`) or extra check (`secrets`: gitleaks, `links`: lychee). Missing tools or scripts fail; they never fall through. |
 | `scripts/check-suppressions.sh` | Tripwire for added skips, suppressions, and deleted or renamed-away tests. |

@@ -464,6 +464,35 @@ case_skills_linked() {
   report skills_linked "$ok" "skill links wrong:$why"; record skills_linked
 }
 
+case_skills_gitignore_negation() {
+  # modules/README.md tells a repository that ignores .agents/ to use a negated rule instead.
+  # Take the rule from the README (so the doc cannot drift) and prove it: skills are tracked and
+  # survive a fresh clone with working links; other files in .agents/ stay ignored.
+  local d="$WORK/skills_gitignore" rules n s ok=1 why=""
+  : > "$WORK/out.log"
+  rules=$(awk '/<!-- skills-gitignore -->/ { f = 1; next } f && /^```gitignore/ { g = 1; next } g && /^```/ { exit } g' "$ROOT/modules/README.md")
+  [ -n "$rules" ] || { report skills_gitignore_negation 0 "no rules found after the marker in modules/README.md"; record skills_gitignore_negation; return; }
+  mkdir -p "$d"; cd "$d"
+  git init -q -b main
+  cp -R "$ROOT/modules/skills/.agents" "$ROOT/modules/skills/.claude" .
+  mkdir -p .agents/handoffs; echo "log quoting a suppression" > .agents/handoffs/review.log
+  printf '%s\n' "$rules" > .gitignore
+  git add -A
+  n=$(git ls-files .agents/skills | grep -c 'SKILL.md$' || true)
+  [ "$n" -gt 0 ] || { ok=0; why="no skills tracked under .agents/skills"; }
+  [ -z "$(git ls-files .agents/handoffs)" ] || { ok=0; why="$why handoffs log was tracked;"; }
+  # The old advice (ignoring the whole folder) is what loses the skills: confirm the test can fail.
+  printf '.agents/\n' > .gitignore; git rm -rq --cached -f . ; git add -A
+  [ -z "$(git ls-files .agents/skills)" ] || { ok=0; why="$why control: '.agents/' still tracked skills;"; }
+  printf '%s\n' "$rules" > .gitignore; git add -A
+  commit "skills"
+  git clone -q "file://$d" "$WORK/skills_gitignore_clone"
+  for s in "$WORK/skills_gitignore_clone/.claude/skills/"*; do
+    [ -f "$s/SKILL.md" ] || { ok=0; why="$why $(basename "$s") does not resolve in a fresh clone;"; }
+  done
+  report skills_gitignore_negation "$ok" "$why"; record skills_gitignore_negation
+}
+
 case_py_clean_pass() {
   new_py_repo py_clean_pass
   expect py_clean_pass pass "=== VERIFY PASSED (python) ==="
@@ -1309,7 +1338,7 @@ ALL_CASES="skills_frontmatter skills_linked workflows_lint_clean
   test_renamed_to_bak_in_tests_dir approved_test_deletion unapproved_deletion_with_other_approval
   secrets_in_intermediate_commit secrets_behind_binary_attribute gitattributes_keep_lf py_lockfile_out_of_date
   stop_hook_blocks_committed_failure stop_hook_remembers_pass py_open_hidden_by_method
-  domain_imports_io_builtin_subpath
+  domain_imports_io_builtin_subpath skills_gitignore_negation
   extras_only_profiles_fail quoted_skip_option test_renamed_out_of_pytest_collection non_ascii_test_deleted
   secrets_in_merge_resolution stop_hook_without_python stop_hook_uses_session_cwd
   stop_hook_untracked_boundaries stop_hook_no_base_committed_failure py_open_hidden_by_subscript

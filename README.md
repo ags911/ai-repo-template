@@ -13,7 +13,7 @@ real need shows up. Supports TypeScript and Python projects, separately or side 
 | `scripts/check-suppressions.sh` | Tripwire for added skips, suppressions, and deleted or renamed-away tests. |
 | `.gitattributes` | Keeps shell scripts and verify config on LF line endings, so they run on Windows. |
 | `.verify-approvals` | Test files a human has approved removing, one path per line. Code-owner reviewed. |
-| `scripts/ci-base-ref.sh` | Picks the diff base for that check in CI (PR base, the pre-push commit, or the empty tree on a first push). |
+| `scripts/ci-base-ref.sh` | Picks the diff base for that check in CI (PR base, the pre-push commit, the empty tree on a first push, or for a manual or scheduled run the merge base with the default branch). |
 | `.github/workflows/verify.yml` | Runs `verify.sh` on every PR and push to main. |
 | `.github/CODEOWNERS` | Requires human review for changes to rules, checks, and tool config. |
 | `.github/dependabot.yml` | Weekly updates for the SHA-pinned Actions. |

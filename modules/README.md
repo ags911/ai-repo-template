@@ -105,6 +105,26 @@ The `windows-symlinks` job in `.github/workflows/selftest.yml` checks both cases
 runner.
 `selftest/run.sh` checks that every skill has its link and every link has a skill.
 
+**If your repository ignores `.agents/`.** Many repositories ignore `.agents/` as a scratch
+folder for agent hand-offs and review logs (the suppression and secret checks read untracked
+files, so ignoring it is the easy fix for a log that quotes `# noqa`). Then the skills are
+ignored too: they are never committed, and in a fresh clone the links in `.claude/skills/`
+point at nothing. Check after installing with `git check-ignore -v .agents/skills/*/SKILL.md`
+(no output means the files are tracked) and `git ls-files .agents/skills`. Fix it with one of:
+- Ignore the folder's contents, not the folder, and keep the skills. Replace `.agents/` with:
+
+<!-- skills-gitignore -->
+```gitignore
+.agents/*
+!.agents/skills/
+```
+
+  Git cannot re-include a file whose parent folder is ignored, which is why the rule is
+  `.agents/*` and not `.agents/`. `selftest/run.sh` (`skills_gitignore_negation`) checks that
+  these two lines track the skills and still ignore other files in `.agents/`.
+- Claude Code only: copy each skill folder into `.claude/skills/` as real files (not links)
+  and leave `.agents/` ignored. Codex reads only `.agents/skills/`, so it will not see them.
+
 An agent loads a skill when the task matches its description; in Claude Code you can also
 run one by name, for example `/adr-builder`.
 

@@ -176,6 +176,12 @@ both. This module makes the agent look, and gives the reviewer something to look
 - `docs/ui-checklist.md`: what to check in each image (spacing, targets, focus, states,
   readability, responsive, CSS pitfalls).
 - `.agents/skills/ui-review/` with its `.claude/skills/` link: the procedure for a UI review.
+- `.agents/skills/design-system-audit/` with its `.claude/skills/` link: rates the design
+  system area by area against a roadmap, finds where its written rules and code disagree,
+  and writes a prioritised plan. It needs the project's own roadmap reference at
+  `docs/research/design-system-roadmap.md`, which the template does not ship: published
+  roadmaps are usually licensed, so add your own copy. Not covered by
+  `selftest/skill-triggers.sh`, which tests the `skills` module only (unenforced).
 
 1. `npm i -D @playwright/test @axe-core/playwright` and install a browser. Add a `webServer`
    and `baseURL` to your Playwright config, and a script `"screens": "playwright test screens"`.
